@@ -1,12 +1,14 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Users, Sparkles, Scale, Clock } from "lucide-react";
+import { Users, Sparkles, Scale, Clock, X, ChevronDown, MessageSquare } from "lucide-react";
 import { fetchAgents, type AgentSummary } from "@/lib/api";
 import { fetchCases } from "@/lib/cases";
 import { useAuth } from "@/lib/useAuth";
 import { categoryColor, initials } from "@/lib/categoryColors";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 const CATEGORY_FILL: Record<string, string> = {
   Strategie: "fill-cat-strategie",
@@ -169,39 +171,11 @@ export function AgentsPage() {
               </svg>
 
               {selected && (
-                <div className="mx-auto mt-2 max-w-md rounded-2xl border border-border bg-surface p-5 shadow-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className={cn(
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold text-white",
-                          categoryColor(selected.category).bg
-                        )}
-                      >
-                        {initials(selected.name)}
-                      </div>
-                      <div>
-                        <div className="text-sm font-semibold text-ink">{selected.name}</div>
-                        <div className="text-[11px] text-ink-subtle">{selected.category}</div>
-                      </div>
-                    </div>
-                    <span className="text-[11px] text-ink-subtle">
-                      {selected.promptCount} Prompts · {selected.caseCount} Fälle
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-ink-muted">{selected.description}</p>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {selected.prompts.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => navigate("/chat", { state: { prefill: p.hint } })}
-                        className="rounded-full border border-border bg-surface-alt px-2.5 py-1 text-[11px] text-ink-muted hover:border-border-hover hover:text-ink"
-                      >
-                        {p.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <AgentDetailCard
+                  agent={selected}
+                  onClose={() => setSelected(null)}
+                  onStartChat={(prefill) => navigate("/chat", { state: { prefill } })}
+                />
               )}
             </div>
           )}
@@ -252,6 +226,90 @@ function Stat({
         <span className="text-[11px] font-medium uppercase tracking-wide">{label}</span>
       </div>
       <div className="mt-1 text-xl font-semibold text-ink">{value}</div>
+    </div>
+  );
+}
+
+function AgentDetailCard({
+  agent,
+  onClose,
+  onStartChat,
+}: {
+  agent: AgentSummary;
+  onClose: () => void;
+  onStartChat: (prefill: string) => void;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+  const c = categoryColor(agent.category);
+  const primaryPrompt = agent.prompts.find((p) => p.depth === "full") ?? agent.prompts[0];
+
+  return (
+    <div className="mx-auto mt-4 max-w-lg rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <div
+            className={cn(
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-semibold text-white",
+              c.bg
+            )}
+          >
+            {initials(agent.name)}
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-ink">{agent.name}</div>
+            <Badge className={cn("mt-0.5 border bg-surface", c.text, c.border)}>
+              {agent.category}
+            </Badge>
+          </div>
+        </div>
+        <button onClick={onClose} className="text-ink-subtle hover:text-ink" title="Schließen">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <p className="mt-3 text-sm text-ink-muted">{agent.description}</p>
+
+      <div className="mt-3 flex items-center gap-3 text-[11px] text-ink-subtle">
+        <span>{agent.promptCount} Prompts</span>
+        <span>·</span>
+        <span>{agent.caseCount} bearbeitete Fälle</span>
+      </div>
+
+      {primaryPrompt && (
+        <Button
+          variant="primary"
+          className="mt-4 w-full"
+          onClick={() => onStartChat(primaryPrompt.hint)}
+        >
+          <MessageSquare className="h-4 w-4" />
+          Neuen Fall an {agent.name} übergeben
+        </Button>
+      )}
+
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="mt-4 flex w-full items-center justify-between text-xs font-medium text-ink-muted hover:text-ink"
+      >
+        Alle {agent.promptCount} Prompts dieses Agenten
+        <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
+      </button>
+
+      {expanded && (
+        <div className="mt-2 flex flex-col gap-2">
+          {agent.prompts.map((p) => (
+            <div key={p.id} className="rounded-lg border border-border bg-surface-alt p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-ink">{p.name}</span>
+                <Badge variant="outline">{p.depth}</Badge>
+              </div>
+              <p className="mt-1 text-[11px] text-ink-muted">{p.hint}</p>
+              <Button size="sm" variant="outline" className="mt-2" onClick={() => onStartChat(p.hint)}>
+                Mit diesem Prompt chatten
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
