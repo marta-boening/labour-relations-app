@@ -10,12 +10,19 @@ const EXECUTOR_MODEL = "claude-sonnet-5";
 const MAIN_AGENTS = ["lr-taktiker", "ar-lotse", "br-kompass", "mbr-check"];
 const MEMORY_WINDOW = 10; // entspricht n8n memoryBufferWindow (letzte N Nachrichten)
 const MAX_TOOL_ITERATIONS = 5;
+const EXECUTOR_MAX_TOKENS = 8000; // Balance Geschwindigkeit vs. Ausführlichkeit
+const MAX_CONTINUATIONS = 2; // Sicherheitsnetz falls Claude trotz Limit abschneidet (verhindert stilles Abbrechen)
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // In-Memory Session-Speicher (entspricht "Session Memory" Node). Pro Prozess,
 // kein Cluster-Sharing — für Einzelnutzer ausreichend, später durch Redis/DB ersetzbar.
 const sessionMemory = new Map();
+
+// Merkt sich pro Session die ursprüngliche Frage, wenn der Router eine Klärung
+// angefordert hat — sonst würde eine kurze Antwort wie "B" ohne Kontext beim
+// Router ankommen. Wird nach der nächsten Nachricht wieder gelöscht.
+const pendingClarifications = new Map();
 
 let metadataCache = null;
 let metadataCacheAt = 0;
@@ -31,15 +38,15 @@ async function fetchGithubRawText(rawUrl) {
   const res = await fetch(rawUrl);
   if (res.ok) return res.text();
 
-  if (res.status === 429 || res.status === 403) {
-    const match = rawUrl.match(/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/);
-    if (match) {
-      const [, owner, repo, ref, filePath] = match;
-      const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${ref}`;
-      const apiRes = await fetch(apiUrl, { headers: { Accept: "application/vnd.github.raw+json" } });
-      if (apiRes.ok) return apiRes.text();
-      throw new Error(`GitHub-Fallback fehlgeschlagen: HTTP ${apiRes.status}`);
-    }
+  // raw.githubusercontent.com liefert gelegentlich 429/403/503 (IP-Rate-Limits,
+  // CDN-Hänger) — dann auf die GitHub Contents API ausweichen (eigener Bucket).
+  const match = rawUrl.match(/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/);
+  if (match) {
+    const [, owner, repo, ref, filePath] = match;
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${ref}`;
+    const apiRes = await fetch(apiUrl, { headers: { Accept: "application/vnd.github.raw+json" } });
+    if (apiRes.ok) return apiRes.text();
+    throw new Error(`GitHub-Load fehlgeschlagen: HTTP ${res.status}, Fallback ebenfalls HTTP ${apiRes.status} (${rawUrl})`);
   }
   throw new Error(`GitHub-Load fehlgeschlagen: HTTP ${res.status} (${rawUrl})`);
 }
@@ -141,12 +148,30 @@ function parseRouterOutput(rawOutput, metadata, userQuestion) {
     parsed.reasoning = "Parse-Fehler im Router-Output → Klärung statt Default";
     isClarification = true;
   } else if (parsed.prompt_id === "clarify") {
-    parsed.target_agent = "clarify";
-    parsed.depth = "none";
-    parsed.confidence = parsed.confidence || "low";
-    parsed.clarification_question =
-      parsed.clarification_question || "Können Sie Ihr Anliegen bitte konkretisieren?";
-    isClarification = true;
+    // "route whenever reasonably possible": auch wenn der Router selbst klären will, zuerst
+    // prüfen, ob der Keyword-Fallback trotzdem einen plausiblen Prompt findet — die LLM-
+    // Anweisung im Router-Prompt allein reicht nicht zuverlässig, hier greift ein
+    // deterministisches Sicherheitsnetz. Nur wenn auch das keinen Treffer liefert, wird
+    // tatsächlich geklärt.
+    const fbId = keywordFallback(userQuestion);
+    if (fbId) {
+      const fbMeta = metadata.prompts.find((p) => p.id === fbId);
+      parsed = {
+        prompt_id: fbId,
+        target_agent: MAIN_AGENTS.includes(fbId) ? "main" : "spezialist",
+        depth: fbMeta ? fbMeta.depth : "full",
+        confidence: "low",
+        user_question: userQuestion,
+        reasoning: "Router wollte klären, Keyword-Fallback fand plausiblen Treffer → " + fbId,
+      };
+    } else {
+      parsed.target_agent = "clarify";
+      parsed.depth = "none";
+      parsed.confidence = parsed.confidence || "low";
+      parsed.clarification_question =
+        parsed.clarification_question || "Können Sie Ihr Anliegen bitte konkretisieren?";
+      isClarification = true;
+    }
   } else if (!validIds.includes(parsed.prompt_id)) {
     const fbId = keywordFallback(userQuestion);
     if (fbId) {
@@ -164,20 +189,11 @@ function parseRouterOutput(rawOutput, metadata, userQuestion) {
       parsed.reasoning = "Router-ID ungültig und Keyword-Fallback ergab keinen klaren Match → Klärung";
       isClarification = true;
     }
-  } else if (parsed.confidence === "low" && parsed.prompt_id !== "clarify") {
-    const fbMeta = metadata.prompts.find((p) => p.id === parsed.prompt_id);
-    const alternatives = fbMeta && fbMeta.related ? fbMeta.related.slice(0, 2) : [];
-    const altText =
-      alternatives.length > 0
-        ? ` Mögliche Richtungen: ${parsed.prompt_id}` + alternatives.map((a) => `, ${a}`).join("") + "."
-        : "";
-    parsed = buildClarifyResult(
-      userQuestion,
-      `Ich bin nicht ganz sicher, wie ich Ihre Frage am besten einordnen soll.${altText} Können Sie kurz konkretisieren, was genau Sie wissen möchten?`
-    );
-    parsed.reasoning = "Router-Confidence low bei gültiger ID → vorsichtshalber Klärung";
-    isClarification = true;
   }
+  // Hinweis: Ein gültiger prompt_id-Treffer mit confidence="low" wird bewusst NICHT mehr zur
+  // Klärung umgeleitet ("route whenever reasonably possible, clarify only when genuinely
+  // necessary") — stattdessen wird lowConfidence unten an buildSystemPrompt() durchgereicht,
+  // damit der Fachagent Annahmen transparent kennzeichnet statt nachzufragen.
 
   if (isClarification) {
     return { ...parsed, isClarification: true };
@@ -190,6 +206,7 @@ function parseRouterOutput(rawOutput, metadata, userQuestion) {
   return {
     ...parsed,
     isClarification: false,
+    lowConfidence: parsed.confidence === "low",
     promptFile: promptMeta.file || parsed.prompt_id + "_Prompt.md",
     promptUrl,
     promptName: promptMeta.name,
@@ -338,6 +355,17 @@ function buildSystemPrompt(mdContent, routing, metadata, qdrantPoints) {
         routing.relatedDetails.map((r) => `- [${r.id}] ${r.name}: ${r.description}`).join("\n")
       : "";
 
+  // Der Router routet inzwischen auch bei niedriger Confidence statt nachzufragen ("route
+  // whenever reasonably possible") — der Fachagent muss dafür Annahmen transparent machen
+  // statt selbst eine Rückfrage zu stellen.
+  const lowConfidenceSection = routing.lowConfidence
+    ? "\n\n---\n\nHINWEIS ZUM SACHVERHALT:\nDer Sachverhalt war beim Routing nicht vollständig eindeutig oder vollständig " +
+      "(z.B. fehlende Details zum Mitarbeiter, zur Historie oder zum genauen Ziel). Frage NICHT nach — " +
+      "triff stattdessen plausible, für die Praxis realistische Annahmen, kennzeichne sie explizit " +
+      "(z.B. \"Ich gehe davon aus, dass…\") und arbeite die Analyse auf dieser Basis vollständig aus. " +
+      "Weise am Ende kurz darauf hin, welche zusätzliche Information die Einschätzung schärfen würde."
+    : "";
+
   const escalationSection = escalationCandidate
     ? "\n\n---\n\nESKALATIONS-OPTION (Quick → Full):\nDieser Prompt ist eine Schnellprüfung. Falls dein Ergebnis Vertiefungsbedarf signalisiert (komplexer Fall, hohes Risiko, viele offene Fragen), weise am Ende deiner Antwort auf folgenden Full-Prompt hin:\n- [" +
       escalationCandidate.id +
@@ -364,7 +392,7 @@ function buildSystemPrompt(mdContent, routing, metadata, qdrantPoints) {
     "- escalation_target: ID des Full-Prompts der eskaliert werden sollte (oder null)\n" +
     "- escalation_reason: kurzer Satz warum Vertiefung sinnvoll wäre (oder null)";
 
-  return mdContent + pastContext + relatedSection + escalationSection + outputInstruction;
+  return mdContent + pastContext + relatedSection + lowConfidenceSection + escalationSection + outputInstruction;
 }
 
 // ── 10. Executor Agent (Claude Sonnet + Perplexity-Tool + Session Memory) ──
@@ -415,16 +443,20 @@ async function runExecutor(systemPrompt, userQuestion, sessionId) {
   const messages = [...history, { role: "user", content: userQuestion }];
 
   let finalText = "";
-  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+  let isContinuation = false; // true, sobald die letzte Nachricht ein abgeschnittener Assistant-Text ist
+
+  for (let i = 0; i < MAX_TOOL_ITERATIONS + MAX_CONTINUATIONS; i++) {
     const response = await anthropic.messages.create({
       model: EXECUTOR_MODEL,
-      max_tokens: 8000,
+      max_tokens: EXECUTOR_MAX_TOKENS,
       system: systemPrompt,
       messages,
       tools,
     });
 
     if (response.stop_reason === "tool_use") {
+      finalText = ""; // Tool-Aufruf vor jeglichem Fließtext -> kein Fortsetzungstext offen
+      isContinuation = false;
       messages.push({ role: "assistant", content: response.content });
       const toolResults = [];
       for (const block of response.content) {
@@ -437,8 +469,26 @@ async function runExecutor(systemPrompt, userQuestion, sessionId) {
       continue;
     }
 
-    finalText = response.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-    messages.push({ role: "assistant", content: finalText });
+    finalText += response.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+
+    if (response.stop_reason === "max_tokens") {
+      // Antwort wurde mitten im Text abgeschnitten (z.B. bei langen Vollanalysen).
+      // Fortsetzung anfordern: Claude setzt den als Assistant-Nachricht übergebenen
+      // Text nahtlos fort, statt neu anzufangen.
+      if (isContinuation) {
+        messages[messages.length - 1] = { role: "assistant", content: finalText };
+      } else {
+        messages.push({ role: "assistant", content: finalText });
+        isContinuation = true;
+      }
+      continue;
+    }
+
+    if (isContinuation) {
+      messages[messages.length - 1] = { role: "assistant", content: finalText };
+    } else {
+      messages.push({ role: "assistant", content: finalText });
+    }
     break;
   }
 
@@ -481,13 +531,19 @@ function formatOutput(rawAnswer, routing) {
 
   // Die Prompt-Vorlagen strukturieren ihre Antwort mit pseudo-XML-Tags
   // (z.B. <empfehlung>, <checkliste>) — für die Anzeige entfernen, Inhalt bleibt.
-  const displayText = finalOutput.replace(/<\/?[a-z_]+(?:\s+label="[^"]*")?>/gi, "").trim();
+  const stripPseudoXml = (s) => s.replace(/<\/?[a-z_]+(?:\s+label="[^"]*")?>/gi, "").trim();
+  const displayText = stripPseudoXml(finalOutput);
   const html = marked.parse(displayText);
+  // answerHtml: dieselbe Antwort OHNE den angehängten Buttons-Text (next_steps/escalation) —
+  // fürs neue React-Frontend, das next_steps/escalation stattdessen als klickbare Buttons aus
+  // den strukturierten Feldern unten rendert. `html`/`output` bleiben unverändert für chat.html.
+  const answerHtml = marked.parse(stripPseudoXml(cleanAnswer));
 
   return {
     output: finalOutput,
     text: finalOutput,
     html,
+    answerHtml,
     promptUsed: routing.promptName,
     promptId: routing.prompt_id,
     suggestedNextPrompts: meta.next_steps,
@@ -499,22 +555,38 @@ function formatOutput(rawAnswer, routing) {
 export async function handleChatMessage({ userQuestion, sessionId, userId }) {
   const metadata = await getMetadata();
 
-  const rawRouterOutput = await callRouter(userQuestion, metadata);
-  const routing = parseRouterOutput(rawRouterOutput, metadata, userQuestion);
+  // Falls die letzte Nachricht in dieser Session eine Rückfrage war, ursprüngliche
+  // Frage + genaue Rückfrage wieder anhängen — sonst ist eine kurze Antwort wie
+  // "B" für einen neuen, kontextlosen Router-Aufruf nicht interpretierbar.
+  let effectiveQuestion = userQuestion;
+  const pending = pendingClarifications.get(sessionId);
+  if (pending) {
+    effectiveQuestion =
+      `${pending.question}\n\nRückfrage an den Nutzer: ${pending.clarificationAsked}\n\n` +
+      `Antwort des Nutzers: ${userQuestion}`;
+    pendingClarifications.delete(sessionId);
+  }
+
+  const rawRouterOutput = await callRouter(effectiveQuestion, metadata);
+  const routing = parseRouterOutput(rawRouterOutput, metadata, effectiveQuestion);
 
   if (routing.isClarification) {
+    pendingClarifications.set(sessionId, {
+      question: effectiveQuestion,
+      clarificationAsked: routing.clarification_question,
+    });
     return formatClarification(routing);
   }
 
   const [mdContent, embedding] = await Promise.all([
     loadPromptMarkdown(routing.promptUrl),
-    getEmbedding(userQuestion),
+    getEmbedding(effectiveQuestion),
   ]);
 
   const qdrantPoints = await qdrantRetrieve(embedding, userId);
   const systemPrompt = buildSystemPrompt(mdContent, routing, metadata, qdrantPoints);
 
-  const rawAnswer = await runExecutor(systemPrompt, userQuestion, sessionId);
+  const rawAnswer = await runExecutor(systemPrompt, effectiveQuestion, sessionId);
   const formatted = formatOutput(rawAnswer, routing);
 
   await qdrantStore({
@@ -523,7 +595,7 @@ export async function handleChatMessage({ userQuestion, sessionId, userId }) {
     sessionId,
     promptId: routing.prompt_id,
     promptName: routing.promptName,
-    userQuestion,
+    userQuestion: effectiveQuestion,
     answer: formatted.output,
   });
 

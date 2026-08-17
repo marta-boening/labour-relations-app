@@ -1,0 +1,272 @@
+import * as React from "react";
+import { useLocation } from "react-router-dom";
+import { MessageSquare, Send } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/useAuth";
+import { sendChatMessage, type ChatResponse } from "@/lib/api";
+
+interface ChatMessage {
+  id: string;
+  role: "user" | "bot";
+  text: string;
+  html?: string;
+  isError?: boolean;
+  timestamp: string;
+  suggestedNextPrompts?: { id: string; label: string }[];
+  escalation?: { suggested: boolean; target: string | null; reason: string | null };
+}
+
+function now() {
+  return new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+}
+
+function makeSessionId() {
+  return "sess-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 9);
+}
+
+export function ChatPage() {
+  const { userId } = useAuth();
+  const location = useLocation();
+  const [sessionId] = React.useState(makeSessionId);
+  const [messages, setMessages] = React.useState<ChatMessage[]>([]);
+  const [input, setInput] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  React.useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  // Von der Prompts- oder Agenten-Seite mit vorbelegtem Kontext angesprungen
+  // (navigate("/chat", { state: { prefill } })).
+  React.useEffect(() => {
+    const prefill = (location.state as { prefill?: string } | null)?.prefill;
+    if (prefill) {
+      setInput(prefill);
+      window.history.replaceState({}, "");
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function send(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || loading) return;
+
+    setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), role: "user", text: trimmed, timestamp: now() },
+    ]);
+    setLoading(true);
+
+    try {
+      const data: ChatResponse = await sendChatMessage({ message: trimmed, sessionId, userId });
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "bot",
+          text: data.output ?? "(leere Antwort)",
+          html: data.answerHtml ?? data.html,
+          timestamp: now(),
+          suggestedNextPrompts: data.suggestedNextPrompts,
+          escalation: data.escalation,
+        },
+      ]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const friendly = message.includes("Failed to fetch")
+        ? "Verbindung zum Server fehlgeschlagen. Läuft der Server (npm start in server/)?"
+        : `Fehler: ${message}`;
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: "bot", text: friendly, isError: true, timestamp: now() },
+      ]);
+    } finally {
+      setLoading(false);
+      textareaRef.current?.focus();
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send(input);
+    }
+  }
+
+  function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    setInput(e.target.value);
+    e.target.style.height = "auto";
+    e.target.style.height = Math.min(e.target.scrollHeight, 130) + "px";
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-6">
+        <div className="text-sm font-semibold text-ink">Neuer Fall / Chat</div>
+        <div className="flex items-center gap-2 text-[11px] text-ink-subtle">
+          <span className="h-[7px] w-[7px] animate-pulse rounded-full bg-risk-low" />
+          Online
+        </div>
+      </header>
+      <div className="flex items-center gap-2 border-b border-border bg-surface-alt px-6 py-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
+          Sitzung
+        </span>
+        <span className="font-mono text-[11px] text-ink-muted">{sessionId}</span>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-6 py-7">
+        {messages.length === 0 && (
+          <div className="mx-auto mb-2 max-w-[460px] rounded-2xl border border-border bg-surface p-8 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-ink">
+              <MessageSquare className="h-6 w-6 text-white" strokeWidth={2} />
+            </div>
+            <h2 className="mb-1.5 text-lg font-semibold text-ink">Wie kann ich helfen?</h2>
+            <p className="text-[13px] leading-relaxed text-ink-muted">
+              Ihr Experte für Arbeitsrecht, Betriebsverfassung und Personalmanagement — stellen
+              Sie Ihre Frage.
+            </p>
+          </div>
+        )}
+
+        {messages.map((m) => (
+          <MessageRow key={m.id} message={m} onFollowUp={send} />
+        ))}
+
+        {loading && <TypingRow />}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="shrink-0 border-t border-border bg-surface px-6 pb-4.5 pt-3.5">
+        <div className="flex items-end gap-2.5">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            disabled={loading}
+            rows={1}
+            maxLength={2000}
+            placeholder="Frage eingeben ..."
+            className="max-h-[130px] min-h-[44px] flex-1 resize-none rounded-full border border-border bg-sand px-[18px] py-[11px] text-sm text-ink outline-none placeholder:text-ink-subtle focus:border-border-hover focus:ring-2 focus:ring-petrol-600/15 disabled:opacity-60"
+          />
+          <button
+            onClick={() => send(input)}
+            disabled={loading || !input.trim()}
+            title="Senden"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ink text-white transition hover:bg-petrol-800 disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            <Send className="h-[18px] w-[18px]" />
+          </button>
+        </div>
+        <div className="mt-1.5 text-right text-[11px] text-ink-subtle">
+          Enter zum Senden &nbsp;·&nbsp; Shift+Enter = neue Zeile
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MessageRow({
+  message,
+  onFollowUp,
+}: {
+  message: ChatMessage;
+  onFollowUp: (text: string) => void;
+}) {
+  const isUser = message.role === "user";
+  return (
+    <div className={cn("flex items-end gap-2.5", isUser && "flex-row-reverse")}>
+      <div
+        className={cn(
+          "flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold",
+          isUser ? "bg-border-hover text-ink" : "bg-ink text-white"
+        )}
+      >
+        {isUser ? "Du" : "LR"}
+      </div>
+      <div className={cn("flex max-w-[94%] flex-col gap-0.5", isUser && "max-w-[68%] items-end")}>
+        <div
+          className={cn(
+            "rounded-2xl px-[15px] py-[11px] text-sm leading-relaxed break-words",
+            isUser
+              ? "rounded-br-[10px] bg-ink text-white"
+              : "rounded-bl-[10px] border border-border bg-surface text-ink shadow-sm",
+            message.isError && "border-[#ffd5d5] bg-[#fff5f5] text-risk-high"
+          )}
+        >
+          {message.html && !message.isError ? (
+            <div className="prose-answer" dangerouslySetInnerHTML={{ __html: message.html }} />
+          ) : (
+            message.text
+          )}
+        </div>
+
+        {!isUser && !message.isError && (
+          <FollowUps message={message} onFollowUp={onFollowUp} />
+        )}
+
+        <span className="px-1 text-[10px] text-ink-subtle">{message.timestamp}</span>
+      </div>
+    </div>
+  );
+}
+
+function FollowUps({
+  message,
+  onFollowUp,
+}: {
+  message: ChatMessage;
+  onFollowUp: (text: string) => void;
+}) {
+  const hasEscalation = message.escalation?.suggested && message.escalation.target;
+  const hasNextSteps = message.suggestedNextPrompts && message.suggestedNextPrompts.length > 0;
+  if (!hasEscalation && !hasNextSteps) return null;
+
+  return (
+    <div className="mt-1 flex max-w-full flex-wrap gap-1.5">
+      {hasEscalation && (
+        <button
+          onClick={() => onFollowUp(`Ja, vertiefen mit ${message.escalation!.target}`)}
+          className="rounded-full border border-petrol-700 bg-petrol-800/5 px-3 py-1.5 text-xs font-medium text-petrol-800 hover:bg-petrol-800/10"
+        >
+          Vertiefen mit {message.escalation!.target}
+        </button>
+      )}
+      {message.suggestedNextPrompts?.map((step, i) => (
+        <button
+          key={i}
+          onClick={() => onFollowUp(step.label)}
+          className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-ink-muted hover:border-border-hover hover:text-ink"
+        >
+          {step.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TypingRow() {
+  return (
+    <div className="flex items-end gap-2.5">
+      <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-ink text-[11px] font-semibold text-white">
+        LR
+      </div>
+      <div className="flex items-center gap-[5px] rounded-2xl rounded-bl-[10px] border border-border bg-surface px-[18px] py-3.5 shadow-sm">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-subtle"
+            style={{ animationDelay: `${i * 0.18}s` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
