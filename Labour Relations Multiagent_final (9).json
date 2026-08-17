@@ -1,0 +1,1032 @@
+{
+    "name": "Labour Relations Multiagent_final",
+    "nodes": [
+        {
+            "parameters": {
+                "public": true,
+                "mode": "webhook",
+                "options": {
+                    "responseMode": "lastNode"
+                }
+            },
+            "id": "fbc5dbba-0c01-40d4-889e-a16a3ff641d2",
+            "name": "Chat Trigger",
+            "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+            "typeVersion": 1.1,
+            "position": [
+                -2256,
+                512
+            ],
+            "webhookId": "lr-chat-webhook"
+        },
+        {
+            "parameters": {
+                "url": "https://raw.githubusercontent.com/marta-boening/LR_Prompts/main/prompts_metadata.json",
+                "options": {
+                    "response": {
+                        "response": {
+                            "responseFormat": "json"
+                        }
+                    }
+                }
+            },
+            "id": "83889328-779f-491f-b2e2-ff7c635fafac",
+            "name": "Load Metadata from GitHub",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                -2032,
+                512
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Metadata vorbereiten: kompakte Hints für Router (Token-optimiert)\nconst metadata = $input.first().json;\nconst userQuestion = $('Chat Trigger').first().json.chatInput;\nconst sessionId = $('Chat Trigger').first().json.sessionId || 'default';\nconst userId = $('Chat Trigger').first().json.userId || 'marta-boening';\n\n// Kompakte Liste: nur id, depth, hint (statt voller description + triggers)\nconst promptCatalog = metadata.prompts.map(p => ({\n  id: p.id,\n  depth: p.depth,\n  hint: p.hint,\n  dis: p.disambiguation || ''\n}));\n\n// Hauptagenten-IDs (für target_agent-Entscheidung)\nconst mainAgents = ['lr-taktiker', 'ar-lotse', 'br-kompass', 'mbr-check'];\n\nreturn [{\n  json: {\n    userQuestion,\n    sessionId,\n    userId,\n    promptCatalog,\n    mainAgents,\n    metadataFull: metadata\n  }\n}];"
+            },
+            "id": "01f6313b-ce64-41f3-843b-f5b290efe999",
+            "name": "Prepare Router Input",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -1824,
+                512
+            ]
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Nutzerfrage: {{ $json.userQuestion }}\n\nVerfügbare Prompts:\n{{ JSON.stringify($json.promptCatalog, null, 2) }}\n\nHauptagenten-IDs: {{ JSON.stringify($json.mainAgents) }}",
+                "hasOutputParser": true,
+                "options": {
+                    "systemMessage": "Du bist ein Routing-Agent für Labour Relations (LR).\nEINZIGE Aufgabe: Wähle den passenden Prompt für die Nutzerfrage ODER frage nach, wenn die Frage zu unklar ist. Keine inhaltliche Antwort.\n\nROUTING-PROZESS:\n1. Lies die Nutzerfrage\n2. Prüfe hint + dis jedes Prompts im Katalog\n3. Wenn EINE prompt_id klar passt → wähle sie, confidence=\"high\"\n4. Wenn ZWEI bis DREI Prompts plausibel sind oder die Frage zu vage ist → prompt_id=\"clarify\", confidence=\"low\", stelle eine konkrete Rückfrage\n5. target_agent: prompt_id in mainAgents → 'main', sonst → 'spezialist' (bei \"clarify\" → 'clarify')\n6. depth: übernimm aus gewähltem Prompt (bei \"clarify\" → 'none')\n\nWANN clarify STATT ID WÄHLEN:\n- Frage zu allgemein (\"Wie hilft das Arbeitsrecht?\", \"Was tun bei Problemen mit BR?\")\n- Mehrere Prompts plausibel und Frage gibt keinen klaren Hinweis (z.B. \"BR-Konflikt\": br-kompass, br-konter, verhandlungs-kompass — was genau?)\n- Quick/Full nicht erkennbar bei wichtigen Themen (Kündigung, AGG)\n- Sachverhalt unvollständig (z.B. \"Können wir kündigen?\" ohne Mitarbeiter-Kontext)\n\nQUICK vs. FULL:\n- \"schnell\", \"kurz\", \"check\", \"ersteinschätzung\", \"geht das\", \"möglich?\" → Quick-Variante (wenn vorhanden)\n- \"vollständig\", \"absichern\", \"strategie\", \"analyse\", \"vorbereiten\", \"wie genau\" → Full-Prompt\n- Keine Hinweise bei wichtigen Themen → clarify (frage nach Tiefe)\n\nENTSCHEIDUNGSHILFE BEI MEHRDEUTIGKEIT:\n\n\"Betriebsrat\" in der Frage:\n- \"Greift Mitbestimmung?\" → br-kompass\n- \"Schneller Check ob MBR\" → br-check-quick oder mbr-check\n- \"BV schreiben/gestalten\" → mbr-architekt\n- \"BR verhandeln\" → verhandlungs-kompass\n- \"BR hat widersprochen\" → br-konter-check (schnell) oder br-konter (Strategie)\n- \"Einigungsstelle\" → einigungsstellen-check (schnell) oder einigungsstellen-kompass\n- Nur \"BR-Problem\" ohne Spezifizierung → clarify\n\n\"Kündigung\" in der Frage:\n- \"Können wir kündigen?\" → kundigungs-prufer\n- \"Prozess/Klage Strategie?\" → prozess-lotse\n- \"Vergleich aushandeln?\" → vergleichs-stratege\n- \"Vorher abmahnen?\" → abmahnungs-assistent\n- Unklar welche Phase → clarify\n\n\"Versetzung\" → versetzungs-check (schnell) oder versetzungs-navigator (vollständig)\n\"Arbeitszeit/Überstunden/ArbZG\" → arbeitszeit-kompass\n\"Bonus/Zielvereinbarung\" → boni-pruefer\n\"Befristung/TzBfG\" → befristungs-pilot\n\"Klausel im Arbeitsvertrag\" → klausel-check\n\"Risiko/wie riskant\" → risiko-radar\n\"Option A vs B/Management-Entscheidung\" → entscheidungs-pilot\n\"Diskriminierung/AGG\" → agg-check (schnell) oder agg-kompass\n\nAllgemein/unklar:\n- \"Restrukturierung/Reorganisation\" ohne konkreten Plan → ar-lotse\n- Schnelle Einschätzung gewünscht und Thema klar → quick-check\n- Risikobewertung mit Thema → risiko-radar\n- Vollanalyse mit Thema → ar-lotse\n- Taktik in konkretem Konflikt → lr-taktiker\n- KEIN klares Thema erkennbar → clarify\n\nKLÄRUNGSFRAGE FORMULIEREN (bei prompt_id=\"clarify\"):\n- Höflich, aber kurz — 1-3 Sätze\n- Konkrete Optionen anbieten, wenn mehrere Prompts plausibel sind\n- Beispiele für gewünschte Konkretisierung nennen\n- KEINE inhaltliche Antwort vorwegnehmen — nur Rückfrage\n\nANTWORT-FORMAT (NUR JSON, nichts davor/danach):\n{\n  \"prompt_id\": \"<id oder 'clarify'>\",\n  \"target_agent\": \"main|spezialist|clarify\",\n  \"depth\": \"quick|full|none\",\n  \"confidence\": \"high|low\",\n  \"user_question\": \"<originalfrage>\",\n  \"reasoning\": \"<1-2 Sätze>\",\n  \"clarification_question\": \"<Rückfrage an den Nutzer, nur wenn prompt_id='clarify', sonst leer>\"\n}\n"
+                }
+            },
+            "id": "97ef5935-5fa2-4eb0-816d-519170ab4640",
+            "name": "Router Agent",
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 1.7,
+            "position": [
+                -1616,
+                512
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Router-Output parsen, validieren, Klärungspfad, Keyword-Fallback, Whitelist\nconst rawOutput = $input.first().json.output;\nconst metadata = $('Prepare Router Input').first().json.metadataFull;\nconst validIds = metadata.prompts.map(p => p.id);\nconst userQuestion = $('Prepare Router Input').first().json.userQuestion;\nconst sessionId = $('Prepare Router Input').first().json.sessionId;\nconst userId = $('Prepare Router Input').first().json.userId;\n\n// Robuste JSON-Extraktion (LLMs verpacken manchmal in Codefences)\nlet parsed;\ntry {\n  const cleaned = rawOutput.replace(/```json|```/g, '').trim();\n  const jsonMatch = cleaned.match(/\\{[\\s\\S]*\\}/);\n  parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);\n} catch (e) {\n  parsed = null;\n}\n\n// ===== KEYWORD-FALLBACK (Notbremse bei Parse-Fehler) =====\nfunction keywordFallback(question) {\n  const q = question.toLowerCase();\n  if (q.includes('befrist'))                           return 'befristungs-pilot';\n  if (q.includes('arbzg') || (q.includes('arbeitszeit') && !q.includes('mitbestimmung')))\n                                                       return 'arbeitszeit-kompass';\n  if (q.includes('bonus') || q.includes('zielvereinbarung') || q.includes('variable vergütung'))\n                                                       return 'boni-pruefer';\n  if (q.includes('klausel') && !q.includes('bv'))      return 'klausel-check';\n  if (q.includes('abmahn'))                            return 'abmahnungs-assistent';\n  if (q.includes('vergleich') && q.includes('klage'))  return 'vergleichs-stratege';\n  if (q.includes('prozess') && (q.includes('klage') || q.includes('gericht')))\n                                                       return 'prozess-lotse';\n  if (q.includes('kündig'))                            return 'kundigungs-prufer';\n  if (q.includes('agg') || q.includes('diskriminier')) return 'agg-check';\n  if (q.includes('versetz'))                           return 'versetzungs-check';\n  if (q.includes('einigungsstelle'))                   return 'einigungsstellen-check';\n  if (q.includes('widerspruch') && q.includes('betriebsrat'))\n                                                       return 'br-konter-check';\n  if (q.includes('betriebsvereinbarung') || q.includes(' bv '))\n                                                       return 'mbr-architekt';\n  if (q.includes('verhandl') && q.includes('betriebsrat'))\n                                                       return 'verhandlungs-kompass';\n  if (q.includes('mitbestimmung'))                     return 'br-kompass';\n  if (q.includes('betriebsrat'))                       return 'br-kompass';\n  if (q.includes('risiko'))                            return 'risiko-radar';\n  if (q.includes('option') && (q.includes(' vs ') || q.includes('vergleich')))\n                                                       return 'entscheidungs-pilot';\n  return null; // null = kein klarer Match → Klärung statt blindem Default\n}\n\n// ===== KLÄRUNGS-OBJEKT bauen =====\nfunction buildClarifyResult(question, customQuestion) {\n  return {\n    prompt_id: 'clarify',\n    target_agent: 'clarify',\n    depth: 'none',\n    confidence: 'low',\n    user_question: question,\n    reasoning: 'Frage zu unklar oder mehrdeutig — Rückfrage erforderlich',\n    clarification_question: customQuestion || 'Können Sie Ihr Anliegen bitte konkretisieren? Geht es zum Beispiel um eine Kündigung, eine Versetzung, eine Betriebsratsangelegenheit, eine Vertragsklausel oder ein anderes Thema?'\n  };\n}\n\n// ===== ENTSCHEIDUNGSBAUM =====\nlet isClarification = false;\n\nif (!parsed) {\n  // Parse-Fehler → direkt klären statt zu raten\n  parsed = buildClarifyResult(userQuestion, null);\n  parsed.reasoning = 'Parse-Fehler im Router-Output → Klärung statt Default';\n  isClarification = true;\n} else if (parsed.prompt_id === 'clarify') {\n  // Router hat selbst um Klärung gebeten\n  parsed.target_agent = 'clarify';\n  parsed.depth = 'none';\n  parsed.confidence = parsed.confidence || 'low';\n  parsed.clarification_question = parsed.clarification_question || \n    'Können Sie Ihr Anliegen bitte konkretisieren?';\n  isClarification = true;\n} else if (!validIds.includes(parsed.prompt_id)) {\n  // Halluzinierte ID → Keyword-Fallback, sonst Klärung\n  const fbId = keywordFallback(userQuestion);\n  if (fbId) {\n    const fbMeta = metadata.prompts.find(p => p.id === fbId);\n    parsed = {\n      prompt_id: fbId,\n      target_agent: ['lr-taktiker','ar-lotse','br-kompass','mbr-check'].includes(fbId) ? 'main' : 'spezialist',\n      depth: fbMeta ? fbMeta.depth : 'full',\n      confidence: 'low',\n      user_question: userQuestion,\n      reasoning: 'Fallback (Whitelist): ' + (parsed.prompt_id || '?') + ' ungültig → Keyword-Match → ' + fbId\n    };\n  } else {\n    parsed = buildClarifyResult(userQuestion, null);\n    parsed.reasoning = 'Router-ID ungültig und Keyword-Fallback ergab keinen klaren Match → Klärung';\n    isClarification = true;\n  }\n} else if (parsed.confidence === 'low' && parsed.prompt_id !== 'clarify') {\n  // Niedrige Confidence → lieber nachfragen\n  const fbMeta = metadata.prompts.find(p => p.id === parsed.prompt_id);\n  const alternatives = (fbMeta && fbMeta.related) ? fbMeta.related.slice(0,2) : [];\n  const altText = alternatives.length > 0\n    ? ` Mögliche Richtungen: ${parsed.prompt_id}` + alternatives.map(a => `, ${a}`).join('') + '.'\n    : '';\n  parsed = buildClarifyResult(\n    userQuestion,\n    `Ich bin nicht ganz sicher, wie ich Ihre Frage am besten einordnen soll.${altText} Können Sie kurz konkretisieren, was genau Sie wissen möchten?`\n  );\n  parsed.reasoning = 'Router-Confidence low bei gültiger ID → vorsichtshalber Klärung';\n  isClarification = true;\n}\n\n// ===== ROUTING-PFAD A: Klärung =====\nif (isClarification) {\n  return [{\n    json: {\n      ...parsed,\n      isClarification: true,\n      sessionId,\n      userId\n    }\n  }];\n}\n\n// ===== ROUTING-PFAD B: regulärer Executor =====\nconst promptMeta = metadata.prompts.find(p => p.id === parsed.prompt_id);\nconst baseUrl = metadata._meta.base_url_raw;\nconst promptUrl = baseUrl + (promptMeta.file || parsed.prompt_id + '_Prompt.md');\n\nreturn [{\n  json: {\n    ...parsed,\n    isClarification: false,\n    sessionId,\n    userId,\n    promptFile: promptMeta.file || (parsed.prompt_id + '_Prompt.md'),\n    promptUrl,\n    promptName: promptMeta.name,\n    related: promptMeta.related || [],\n    relatedDetails: (promptMeta.related || []).map(rid => {\n      const r = metadata.prompts.find(p => p.id === rid);\n      return r ? { id: r.id, name: r.name, hint: r.hint } : null;\n    }).filter(Boolean)\n  }\n}];\n"
+            },
+            "id": "5db654f8-73d3-44e7-ac43-a03523c25701",
+            "name": "Parse + Validate Router Output",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -1296,
+                512
+            ]
+        },
+        {
+            "parameters": {
+                "url": "={{ $json.promptUrl }}",
+                "options": {
+                    "response": {
+                        "response": {
+                            "responseFormat": "text"
+                        }
+                    }
+                }
+            },
+            "id": "81a09a77-2a2a-4474-8cc6-ab2a5ceb70b5",
+            "name": "Load Prompt .md from GitHub",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                -1120,
+                512
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// System-Prompt-Bundle: .md + Qdrant-Kontext + related-Buttons-Instruktion + Eskalations-Hinweis\nconst mdContent = $('Load Prompt .md from GitHub').first().json.data || $('Load Prompt .md from GitHub').first().json;\nconst routing = $('Parse + Validate Router Output').first().json;\nconst metadata = $('Load Metadata from GitHub').first().json;\n\n// Eskalations-Kandidat: bei quick-Prompts, suche im related-Array nach einem full-Prompt\nconst currentPrompt = metadata.prompts.find(p => p.id === routing.prompt_id);\nlet escalationCandidate = null;\nif (currentPrompt && currentPrompt.depth === 'quick' && currentPrompt.related) {\n  for (const relId of currentPrompt.related) {\n    const rel = metadata.prompts.find(p => p.id === relId);\n    if (rel && rel.depth === 'full') {\n      escalationCandidate = { id: rel.id, name: rel.name, description: rel.description };\n      break;\n    }\n  }\n}\n\n// Qdrant-Kontext: frühere Fälle aus dieser Session\nlet pastContext = '';\ntry {\n  const qdrantResults = $('Qdrant Retrieve').first().json;\n  const points = qdrantResults && qdrantResults.result && qdrantResults.result.points;\n  if (points && points.length > 0) {\n    pastContext = '\\n\\n---\\n\\nFRÜHERE FÄLLE / KONTEXT DES BEARBEITERS (sessionübergreifend):\\n' +\n      points.map((p, i) => {\n        const pl = p.payload || {};\n        return `[${i + 1}] ${pl.timestamp || 'früher'} | Prompt: ${pl.promptName || '?'}\\n` +\n               `   Frage: ${pl.question || ''}\\n` +\n               `   Antwort (gekürzt): ${(pl.answer || '').slice(0, 500)}...`;\n      }).join('\\n\\n') +\n      '\\n\\nNutze diesen Kontext, wenn er für die aktuelle Frage relevant ist. Wenn der vorherige Fall denselben Sachverhalt betraf, baue darauf auf statt von vorne anzufangen.';\n  }\n} catch (e) {\n  // Qdrant leer oder nicht verfügbar — kein Problem, einfach ohne Kontext weiterlaufen\n}\n\nconst relatedSection = routing.relatedDetails.length > 0\n  ? '\\n\\n---\\n\\nVERFÜGBARE FOLGEPROMPTS (für Empfehlung am Ende):\\n' +\n    routing.relatedDetails.map(r => `- [${r.id}] ${r.name}: ${r.description}`).join('\\n')\n  : '';\n\nconst escalationSection = escalationCandidate\n  ? '\\n\\n---\\n\\nESKALATIONS-OPTION (Quick → Full):\\nDieser Prompt ist eine Schnellprüfung. Falls dein Ergebnis Vertiefungsbedarf signalisiert (komplexer Fall, hohes Risiko, viele offene Fragen), weise am Ende deiner Antwort auf folgenden Full-Prompt hin:\\n- [' + escalationCandidate.id + '] ' + escalationCandidate.name + ': ' + escalationCandidate.description\n  : '';\n\nconst outputInstruction = '\\n\\n---\\n\\nWICHTIG für deine Antwort:\\n' +\n  '1. Beantworte die Nutzerfrage gemäß deiner Prompt-Spezifikation oben\\n' +\n  '2. Am ENDE deiner Antwort hänge IMMER folgenden Block an:\\n\\n' +\n  '<<<META>>>\\n' +\n  '{\\n' +\n  '  \"next_steps\": [{\"id\": \"<prompt_id>\", \"label\": \"<kurzer Aktionstext>\"}],\\n' +\n  '  \"escalation_suggested\": <true|false>,\\n' +\n  '  \"escalation_target\": \"<prompt_id oder null>\",\\n' +\n  '  \"escalation_reason\": \"<warum vertiefen, oder null>\"\\n' +\n  '}\\n' +\n  '<<<END_META>>>\\n\\n' +\n  '- next_steps: 1-3 sinnvolle Folgeprompts aus der verfügbaren Liste\\n' +\n  '- escalation_suggested: true wenn aktueller Prompt quick ist UND Vertiefung sinnvoll wäre\\n' +\n  '- escalation_target: ID des Full-Prompts der eskaliert werden sollte (oder null)\\n' +\n  '- escalation_reason: kurzer Satz warum Vertiefung sinnvoll wäre (oder null)';\n\nconst systemPrompt = (typeof mdContent === 'string' ? mdContent : JSON.stringify(mdContent))\n  + pastContext\n  + relatedSection\n  + escalationSection\n  + outputInstruction;\n\n// Query-Embedding für späteren Store-Schritt durchreichen\nconst queryEmbedding = $('Voyage Embedding').first().json.data[0].embedding;\n\nreturn [{\n  json: {\n    systemPrompt,\n    userQuestion: routing.user_question,\n    sessionId: routing.sessionId,\n    userId: routing.userId,\n    promptId: routing.prompt_id,\n    promptName: routing.promptName,\n    targetAgent: routing.target_agent,\n    depth: routing.depth,\n    relatedDetails: routing.relatedDetails,\n    escalationCandidate,\n    queryEmbedding\n  }\n}];"
+            },
+            "id": "962f3bc2-4480-47f0-97e0-38a2056bac11",
+            "name": "Build System Prompt",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -336,
+                512
+            ]
+        },
+        {
+            "parameters": {
+                "rules": {
+                    "values": [
+                        {
+                            "conditions": {
+                                "options": {
+                                    "caseSensitive": true,
+                                    "leftValue": "",
+                                    "typeValidation": "strict",
+                                    "version": 2
+                                },
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{ $json.promptId }}",
+                                        "rightValue": "lr-taktiker",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        },
+                                        "id": "63d4e2d5-76b5-4e4c-b4e0-7a75768c3982"
+                                    }
+                                ],
+                                "combinator": "and"
+                            },
+                            "renameOutput": true,
+                            "outputKey": "lr-taktiker"
+                        },
+                        {
+                            "conditions": {
+                                "options": {
+                                    "caseSensitive": true,
+                                    "leftValue": "",
+                                    "typeValidation": "strict",
+                                    "version": 2
+                                },
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{ $json.promptId }}",
+                                        "rightValue": "ar-lotse",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        },
+                                        "id": "edad091f-26ad-4c8d-a27a-09ba5f65a76a"
+                                    }
+                                ],
+                                "combinator": "and"
+                            },
+                            "renameOutput": true,
+                            "outputKey": "ar-lotse"
+                        },
+                        {
+                            "conditions": {
+                                "options": {
+                                    "caseSensitive": true,
+                                    "leftValue": "",
+                                    "typeValidation": "strict",
+                                    "version": 2
+                                },
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{ $json.promptId }}",
+                                        "rightValue": "br-kompass",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        },
+                                        "id": "1ba49002-9b1e-4f88-aa25-d7397744f43f"
+                                    }
+                                ],
+                                "combinator": "and"
+                            },
+                            "renameOutput": true,
+                            "outputKey": "br-kompass"
+                        },
+                        {
+                            "conditions": {
+                                "options": {
+                                    "caseSensitive": true,
+                                    "leftValue": "",
+                                    "typeValidation": "strict",
+                                    "version": 2
+                                },
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{ $json.promptId }}",
+                                        "rightValue": "mbr-check",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        },
+                                        "id": "a9f4011a-3b41-4059-ab6a-2007923e96fe"
+                                    }
+                                ],
+                                "combinator": "and"
+                            },
+                            "renameOutput": true,
+                            "outputKey": "mbr-check"
+                        }
+                    ]
+                },
+                "options": {
+                    "fallbackOutput": "extra",
+                    "renameFallbackOutput": "spezialist"
+                }
+            },
+            "id": "3c8a90c0-cb1b-4789-86a3-d5aa569f3b63",
+            "name": "Switch: Main vs Spezialist",
+            "type": "n8n-nodes-base.switch",
+            "typeVersion": 3.2,
+            "position": [
+                -96,
+                512
+            ]
+        },
+        {
+            "parameters": {
+                "sessionIdType": "customKey",
+                "sessionKey": "={{ $json.sessionId }}"
+            },
+            "id": "e95f8464-6a92-4895-b1f0-e448192490c8",
+            "name": "Session Memory",
+            "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+            "typeVersion": 1.3,
+            "position": [
+                800,
+                1168
+            ]
+        },
+        {
+            "parameters": {
+                "toolDescription": "RECHERCHE-TOOL für aktuelle juristische Informationen.\n\nNUTZE DIESES TOOL, wenn deine Antwort eines der folgenden enthalten soll:\n- Konkrete Urteile mit Aktenzeichen oder Datum (BAG, BGH, EuGH, LAG, ArbG)\n- Gesetzesänderungen, neue Paragraphen oder reformierte Vorschriften (z.B. EntgTranspG, NachweisG, AGG, BetrVG)\n- Statistiken oder Studien (z.B. Statistisches Bundesamt, IAB, WSI)\n- Tarifabschlüsse oder Tarifentwicklungen\n- Aktuelle politische Entwicklungen (Gesetzesentwürfe, Verbändeforderungen)\n- Frist- oder Schwellenwerte, die sich ändern können (z.B. Mindestlohn, Pfändungsfreigrenzen)\n\nFormuliere die Suchanfrage präzise mit den relevanten Stichworten, Aktenzeichen oder Paragraphen.",
+                "method": "POST",
+                "url": "https://api.perplexity.ai/chat/completions",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "perplexityApi",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"model\": \"sonar\",\n  \"messages\": [{\"role\": \"user\", \"content\": \"{searchQuery}\"}]\n}",
+                "placeholderDefinitions": {
+                    "values": [
+                        {
+                            "name": "searchQuery",
+                            "description": "Die Suchanfrage in natürlicher Sprache, präzise mit Stichworten, Aktenzeichen, Datumsangaben oder Paragraphen.",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "id": "2d2e631e-bb08-4618-aaab-b2e3caf0b824",
+            "name": "Perplexity Web Research",
+            "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+            "typeVersion": 1.1,
+            "position": [
+                1040,
+                1056
+            ],
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "6z2SX6FgB3ekny6R",
+                    "name": "Voyage-LR"
+                },
+                "perplexityApi": {
+                    "id": "YI8TNtYQl24tryn3",
+                    "name": "Perplexity account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "={{ $json.userQuestion }}",
+                "options": {
+                    "systemMessage": "={{ $json.systemPrompt }}"
+                }
+            },
+            "id": "398b7e17-690a-4aa4-9487-eb4a934fc8f4",
+            "name": "Executor: LR-Taktiker",
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 1.7,
+            "position": [
+                256,
+                224
+            ]
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "={{ $json.userQuestion }}",
+                "options": {
+                    "systemMessage": "={{ $json.systemPrompt }}"
+                }
+            },
+            "id": "33a6434f-2063-4bd1-95e2-2484ca778aad",
+            "name": "Executor: AR-Lotse",
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 1.7,
+            "position": [
+                240,
+                416
+            ]
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "={{ $json.userQuestion }}",
+                "options": {
+                    "systemMessage": "={{ $json.systemPrompt }}"
+                }
+            },
+            "id": "4c8e7751-8c76-47b3-8f2e-a3fc333f4dd9",
+            "name": "Executor: BR-Kompass",
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 1.7,
+            "position": [
+                256,
+                624
+            ]
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "={{ $json.userQuestion }}",
+                "options": {
+                    "systemMessage": "={{ $json.systemPrompt }}"
+                }
+            },
+            "id": "bc672af6-7442-4622-b6ac-bf75d24584d6",
+            "name": "Executor: MBR-Check",
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 1.7,
+            "position": [
+                256,
+                816
+            ]
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "={{ $json.userQuestion }}",
+                "options": {
+                    "systemMessage": "={{ $json.systemPrompt }}"
+                }
+            },
+            "id": "be496b86-25e3-482f-811f-7e7c915ae3b4",
+            "name": "Executor: Spezialist (dynamisch)",
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 1.7,
+            "position": [
+                256,
+                1024
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Antwort + META-Block aufbereiten (Buttons + Eskalation)\nconst rawAnswer = $input.first().json.output;\nconst routing = $('Build System Prompt').first().json;\n\nlet cleanAnswer = rawAnswer;\nlet meta = {\n  next_steps: [],\n  escalation_suggested: false,\n  escalation_target: null,\n  escalation_reason: null\n};\n\n// META-Block extrahieren (neues Format)\nconst metaMatch = rawAnswer.match(/<<<META>>>([\\s\\S]*?)<<<END_META>>>/);\nif (metaMatch) {\n  try {\n    meta = JSON.parse(metaMatch[1].trim());\n  } catch (e) {\n    // Fallback wenn JSON kaputt — meta bleibt wie initialisiert\n  }\n  cleanAnswer = rawAnswer.replace(/<<<META>>>[\\s\\S]*?<<<END_META>>>/, '').trim();\n}\n\n// Fallback: alter NEXT_STEPS-Block (für Übergangsphase)\nif (!metaMatch) {\n  const oldMatch = rawAnswer.match(/<<<NEXT_STEPS>>>([\\s\\S]*?)<<<END_NEXT_STEPS>>>/);\n  if (oldMatch) {\n    try {\n      const oldData = JSON.parse(oldMatch[1].trim());\n      meta.next_steps = oldData.buttons || [];\n    } catch (e) {}\n    cleanAnswer = rawAnswer.replace(/<<<NEXT_STEPS>>>[\\s\\S]*?<<<END_NEXT_STEPS>>>/, '').trim();\n  }\n}\n\n// Markdown-Block am Ende der Antwort: Eskalations-Hinweis + Folgeprompts\nlet appendix = '';\n\nif (meta.escalation_suggested && meta.escalation_target) {\n  appendix += '\\n\\n---\\n\\n### Vertiefung empfohlen\\n';\n  if (meta.escalation_reason) {\n    appendix += `${meta.escalation_reason}\\n\\n`;\n  }\n  appendix += `Antworte mit **\"Ja, vertiefen mit ${meta.escalation_target}\"**, um die Tiefenanalyse zu starten.`;\n}\n\nif (meta.next_steps && meta.next_steps.length > 0) {\n  appendix += '\\n\\n---\\n\\n**Mögliche nächste Schritte:**\\n';\n  appendix += meta.next_steps.map(b => `- 🔹 \\`${b.id}\\` — ${b.label}`).join('\\n');\n  appendix += '\\n\\n_Tipp: Stelle deine Folgefrage mit Bezug auf einen dieser Prompts._';\n}\n\nconst finalOutput = cleanAnswer + appendix;\n\nreturn [{\n  json: {\n    output: finalOutput,\n    text: finalOutput,\n    promptUsed: routing.promptName,\n    promptId: routing.promptId,\n    sessionId: routing.sessionId,\n    suggestedNextPrompts: meta.next_steps,\n    escalation: {\n      suggested: meta.escalation_suggested,\n      target: meta.escalation_target,\n      reason: meta.escalation_reason\n    },\n    _meta: {\n      depth: routing.depth,\n      targetAgent: routing.targetAgent\n    }\n  }\n}];"
+            },
+            "id": "907a1cc3-f67b-49f8-b206-7e831ef7ea81",
+            "name": "Format Output + Buttons",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                816,
+                512
+            ]
+        },
+        {
+            "parameters": {
+                "content": "## 📥 EINSTIEG\nChat-Trigger startet bei Nutzereingabe.\n\nDie Frage wird zuerst zum **Router** geschickt — er entscheidet anhand der Metadata, welcher Prompt passt.",
+                "height": 180,
+                "width": 320,
+                "color": 5
+            },
+            "id": "743e6ca6-a9e8-4fa5-a5b1-1f83656f3f0f",
+            "name": "Note Input",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                -2304,
+                288
+            ]
+        },
+        {
+            "parameters": {
+                "content": "## 🧠 ROUTING\nClaude Sonnet entscheidet schnell + günstig welcher Prompt passt.\n\nOutput wird **streng validiert** gegen Whitelist — Halluzinationen fallen auf `lr-taktiker` zurück.",
+                "height": 180,
+                "width": 320,
+                "color": 6
+            },
+            "id": "9e9dc321-d59f-412c-9eed-cb28ff6a5d28",
+            "name": "Note Routing",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                -1664,
+                288
+            ]
+        },
+        {
+            "parameters": {
+                "content": "## ⚡ AUSFÜHRUNG\n**Hybrid-Architektur:**\n- 4 dedizierte Haupt-Executor (lr-taktiker, ar-lotse, br-kompass, mbr-check)\n- 1 Spezialist-Executor für die übrigen Prompts (dynamisch geladen)\n\nAlle teilen sich **Claude Sonnet**, **Memory**, **Perplexity-Tool**.",
+                "height": 220,
+                "width": 380,
+                "color": 7
+            },
+            "id": "def8883d-3e6c-4d50-972a-4f61527ea3f9",
+            "name": "Note Execution",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                176,
+                -48
+            ]
+        },
+        {
+            "parameters": {
+                "content": "## 🔄 PROMPTKETTEN (Phase 1)\nDer Executor liefert am Ende seiner Antwort einen `<<<NEXT_STEPS>>>`-Block mit empfohlenen Folgeprompts (basierend auf `related` in Metadata).\n\nDer Format-Node extrahiert die Vorschläge und hängt sie als Markdown-Buttons unten an die Chat-Antwort.",
+                "height": 220,
+                "width": 380,
+                "color": 3
+            },
+            "id": "2c6e72bd-cfe0-4976-b997-3d3fcc741f81",
+            "name": "Note Chains",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                688,
+                224
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.voyageai.com/v1/embeddings",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"model\": \"voyage-3-large\",\n  \"input\": [\"{{ $('Parse + Validate Router Output').first().json.user_question }}\"],\n  \"input_type\": \"query\"\n}",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.4,
+            "position": [
+                -736,
+                512
+            ],
+            "id": "b72fc092-c1a5-4e59-9240-6ac0dcfe5f3d",
+            "name": "Voyage Embedding",
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "FV4vszSsJGpiRtO6",
+                    "name": "Voyage AI"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://9af5c5f6-e8ad-4f2e-b074-2bbfcc4e1bd4.europe-west3-0.gcp.cloud.qdrant.io/collections/lr_cases/points/query",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"query\": {{ JSON.stringify($json.data[0].embedding) }},\n  \"limit\": 5,\n  \"with_payload\": true,\n  \"filter\": {\n    \"must\": [\n      {\n        \"key\": \"userId\",\n        \"match\": {\n          \"value\": \"{{ $('Prepare Router Input').first().json.userId }}\"\n        }\n      }\n    ]\n  }\n}",
+                "options": {
+                    "response": {
+                        "response": {
+                            "neverError": true
+                        }
+                    }
+                }
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.4,
+            "position": [
+                -544,
+                512
+            ],
+            "id": "d7665516-e4f6-4517-8f23-b79f4ba4f5de",
+            "name": "Qdrant Retrieve",
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "43KOTSXud1F8XNVm",
+                    "name": "Qdrant Cloud"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "PUT",
+                "url": "https://9af5c5f6-e8ad-4f2e-b074-2bbfcc4e1bd4.europe-west3-0.gcp.cloud.qdrant.io/collections/lr_cases/points",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"points\": [\n    {\n      \"id\": {{ Math.floor(Date.now() / 1000) * 1000 + Math.floor(Math.random() * 1000) }},\n      \"vector\": {{ JSON.stringify($('Build System Prompt').first().json.queryEmbedding) }},\n      \"payload\": {\n        \"userId\": \"{{ $('Build System Prompt').first().json.userId }}\",\n        \"sessionId\": \"{{ $('Build System Prompt').first().json.sessionId }}\",\n        \"promptId\": \"{{ $('Build System Prompt').first().json.promptId }}\",\n        \"promptName\": \"{{ $('Build System Prompt').first().json.promptName }}\",\n        \"question\": {{ JSON.stringify($('Build System Prompt').first().json.userQuestion) }},\n        \"answer\": {{ JSON.stringify($json.output) }},\n        \"timestamp\": \"{{ $now.toISO() }}\"\n      }\n    }\n  ]\n}",
+                "options": {
+                    "response": {
+                        "response": {
+                            "neverError": true
+                        }
+                    }
+                }
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.4,
+            "position": [
+                1024,
+                512
+            ],
+            "id": "e33ed355-46c4-41c1-acf9-0690ef9e9cde",
+            "name": "Qdrant Store",
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "43KOTSXud1F8XNVm",
+                    "name": "Qdrant Cloud"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "model": {
+                    "__rl": true,
+                    "value": "claude-sonnet-4-6",
+                    "mode": "list",
+                    "cachedResultName": "Claude Sonnet 4.6"
+                },
+                "options": {
+                    "maxTokensToSample": 8000,
+                    "temperature": 0.3
+                }
+            },
+            "id": "4ae4cd76-e563-45fe-a253-aca8a1bbf747",
+            "name": "Executor Model (Claude Sonnet)",
+            "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+            "typeVersion": 1.3,
+            "position": [
+                512,
+                1216
+            ],
+            "credentials": {
+                "anthropicApi": {
+                    "id": "jKrIlSDDzYAgJMOZ",
+                    "name": "Anthropic-LR"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Hole die echte Antwort von Format Output + Buttons\nconst formatOutput = $('Format Output + Buttons').first().json;\n\nreturn [{\n  json: {\n    output: formatOutput.output,\n    text: formatOutput.text || formatOutput.output\n  }\n}];"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1232,
+                512
+            ],
+            "id": "56791423-e724-4554-bbeb-bd7fe8ed360c",
+            "name": "Return to chat"
+        },
+        {
+            "parameters": {
+                "jsCode": "// Die Daten sind in input.json.data\nconst content = $input.first().json.data;\n\nif (!content || typeof content !== 'string') {\n  return [{ body: content }];\n}\n\n// Suche nach <s>...</s> Block\nlet match = content.match(/```xml\\s*<s>[\\s\\S]*?<\\/s>\\s*```/m);\n\nif (match) {\n  return [{\n    body: match[0]\n      .replace(/```xml\\s*/g, '')\n      .replace(/\\s*```/g, '')\n      .trim()\n  }];\n}\n\n// Fallback: <s>...</s> ohne Backticks\nmatch = content.match(/<s>[\\s\\S]*?<\\/s>/m);\nif (match) {\n  return [{\n    body: match[0]\n  }];\n}\n\n// Wenn nichts gefunden: ganze Datei\nreturn [{\n  body: content\n}];"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -944,
+                512
+            ],
+            "id": "d0a26385-e47b-41f6-8006-1c4c16d9f743",
+            "name": "Code in JavaScript"
+        },
+        {
+            "parameters": {
+                "model": {
+                    "__rl": true,
+                    "value": "claude-haiku-4-5-20251001",
+                    "mode": "list",
+                    "cachedResultName": "Claude Haiku 4.5"
+                },
+                "options": {
+                    "maxTokensToSample": 500,
+                    "temperature": 0
+                }
+            },
+            "id": "7d2f2baf-7432-4a52-8724-6ca74eeb25dc",
+            "name": "Router Model (Claude Haiku)",
+            "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+            "typeVersion": 1.3,
+            "position": [
+                -1408,
+                752
+            ],
+            "credentials": {
+                "anthropicApi": {
+                    "id": "jKrIlSDDzYAgJMOZ",
+                    "name": "Anthropic-LR"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "id": "b3c18994-f957-401d-9ade-c9bcb2a08a04",
+                            "leftValue": "={{ $json.isClarification }}",
+                            "rightValue": true,
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "true",
+                                "singleValue": true
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "id": "f44c391d-f7e9-4d6a-a407-3c558a493f79",
+            "name": "Route: clarify or execute",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                -1248,
+                736
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Klärungs-Antwort an den Chat zurückgeben (kein Executor, kein RAG, kein Store)\nconst data = $input.first().json;\n\nconst question = data.clarification_question || 'Können Sie Ihr Anliegen bitte konkretisieren?';\nconst reasoning = data.reasoning || '';\n\n// Markdown-formatierte Rückfrage\nconst output = `❓ **Rückfrage zur besseren Beratung**\\n\\n${question}\\n\\n---\\n*Ich frage nach, weil eine zielgerichtete Antwort eine konkretere Frage braucht. Antworten Sie einfach in der nächsten Nachricht.*`;\n\nreturn [{\n  json: {\n    output: output,\n    text: output,\n    _meta: {\n      isClarification: true,\n      routerReasoning: reasoning,\n      sessionId: data.sessionId,\n      userId: data.userId\n    }\n  }\n}];\n"
+            },
+            "id": "0e93a2d8-5a7e-4452-88fb-90dd2e9c4f02",
+            "name": "Format Clarification",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -1024,
+                720
+            ]
+        }
+    ],
+    "pinData": {},
+    "connections": {
+        "Chat Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Load Metadata from GitHub",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Load Metadata from GitHub": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Router Input",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare Router Input": {
+            "main": [
+                [
+                    {
+                        "node": "Router Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Router Agent": {
+            "main": [
+                [
+                    {
+                        "node": "Parse + Validate Router Output",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse + Validate Router Output": {
+            "main": [
+                [
+                    {
+                        "node": "Route: clarify or execute",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Load Prompt .md from GitHub": {
+            "main": [
+                [
+                    {
+                        "node": "Code in JavaScript",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build System Prompt": {
+            "main": [
+                [
+                    {
+                        "node": "Switch: Main vs Spezialist",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Switch: Main vs Spezialist": {
+            "main": [
+                [
+                    {
+                        "node": "Executor: LR-Taktiker",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Executor: AR-Lotse",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Executor: BR-Kompass",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Executor: MBR-Check",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Executor: Spezialist (dynamisch)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Session Memory": {
+            "ai_memory": [
+                [
+                    {
+                        "node": "Executor: LR-Taktiker",
+                        "type": "ai_memory",
+                        "index": 0
+                    },
+                    {
+                        "node": "Executor: AR-Lotse",
+                        "type": "ai_memory",
+                        "index": 0
+                    },
+                    {
+                        "node": "Executor: BR-Kompass",
+                        "type": "ai_memory",
+                        "index": 0
+                    },
+                    {
+                        "node": "Executor: MBR-Check",
+                        "type": "ai_memory",
+                        "index": 0
+                    },
+                    {
+                        "node": "Executor: Spezialist (dynamisch)",
+                        "type": "ai_memory",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Perplexity Web Research": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Executor: LR-Taktiker",
+                        "type": "ai_tool",
+                        "index": 0
+                    },
+                    {
+                        "node": "Executor: AR-Lotse",
+                        "type": "ai_tool",
+                        "index": 0
+                    },
+                    {
+                        "node": "Executor: BR-Kompass",
+                        "type": "ai_tool",
+                        "index": 0
+                    },
+                    {
+                        "node": "Executor: MBR-Check",
+                        "type": "ai_tool",
+                        "index": 0
+                    },
+                    {
+                        "node": "Executor: Spezialist (dynamisch)",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Executor: LR-Taktiker": {
+            "main": [
+                [
+                    {
+                        "node": "Format Output + Buttons",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Executor: AR-Lotse": {
+            "main": [
+                [
+                    {
+                        "node": "Format Output + Buttons",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Executor: BR-Kompass": {
+            "main": [
+                [
+                    {
+                        "node": "Format Output + Buttons",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Executor: MBR-Check": {
+            "main": [
+                [
+                    {
+                        "node": "Format Output + Buttons",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Executor: Spezialist (dynamisch)": {
+            "main": [
+                [
+                    {
+                        "node": "Format Output + Buttons",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Voyage Embedding": {
+            "main": [
+                [
+                    {
+                        "node": "Qdrant Retrieve",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Qdrant Retrieve": {
+            "main": [
+                [
+                    {
+                        "node": "Build System Prompt",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Output + Buttons": {
+            "main": [
+                [
+                    {
+                        "node": "Qdrant Store",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Executor Model (Claude Sonnet)": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Executor: LR-Taktiker",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    },
+                    {
+                        "node": "Executor: AR-Lotse",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    },
+                    {
+                        "node": "Executor: BR-Kompass",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    },
+                    {
+                        "node": "Executor: MBR-Check",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    },
+                    {
+                        "node": "Executor: Spezialist (dynamisch)",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Qdrant Store": {
+            "main": [
+                [
+                    {
+                        "node": "Return to chat",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Code in JavaScript": {
+            "main": [
+                [
+                    {
+                        "node": "Voyage Embedding",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Router Model (Claude Haiku)": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Router Agent",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Route: clarify or execute": {
+            "main": [
+                [
+                    {
+                        "node": "Format Clarification",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Load Prompt .md from GitHub",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": true,
+    "settings": {
+        "executionOrder": "v1",
+        "binaryMode": "separate"
+    },
+    "versionId": "890fdbc5-5054-4937-a459-5bb6b25f0291",
+    "meta": {
+        "instanceId": "1a4c7f8a0e12bdd6cdbd1b2ce8d3afa7416ede1f7ad0ff1c4645576498b53b6d"
+    },
+    "id": "AC7qT7268vaMdXuF",
+    "tags": []
+}
