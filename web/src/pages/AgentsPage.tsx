@@ -4,6 +4,8 @@ import { Users, Sparkles } from "lucide-react";
 import { fetchAgents } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { categoryColor, initials } from "@/lib/categoryColors";
+import { cn } from "@/lib/utils";
 
 export function AgentsPage() {
   const navigate = useNavigate();
@@ -33,12 +35,26 @@ export function AgentsPage() {
       <div className="flex-1 overflow-y-auto p-6">
         {isLoading && <div className="text-sm text-ink-subtle">Lädt Agenten…</div>}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {agents.map((agent) => (
+          {agents.map((agent) => {
+            const c = categoryColor(agent.category);
+            return (
             <Card key={agent.id}>
               <CardHeader>
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle>{agent.name}</CardTitle>
-                  <Badge variant="petrol">{agent.category}</Badge>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={cn(
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold text-white",
+                        c.bg
+                      )}
+                    >
+                      {initials(agent.name)}
+                    </div>
+                    <CardTitle>{agent.name}</CardTitle>
+                  </div>
+                  <Badge className={cn("border bg-surface", c.text, c.border)}>
+                    {agent.category}
+                  </Badge>
                 </div>
                 <CardDescription>{agent.description}</CardDescription>
               </CardHeader>
@@ -64,7 +80,8 @@ export function AgentsPage() {
                 </button>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

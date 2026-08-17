@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { GraduationCap } from "lucide-react";
 import { fetchAgents } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { categoryColor } from "@/lib/categoryColors";
+import { cn } from "@/lib/utils";
 
 // v1: Wissen als Themenübersicht direkt aus dem bestehenden Prompt-/Agenten-Katalog abgeleitet
 // (Kategorien aus agentCatalog.js) statt einer separaten Wissensdatenbank — eine eigenständige
@@ -30,15 +32,19 @@ export function KnowledgePage() {
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="flex flex-col gap-6">
-          {Object.entries(byCategory).map(([category, catAgents]) => (
+          {Object.entries(byCategory).map(([category, catAgents]) => {
+            const c = categoryColor(category);
+            return (
             <div key={category}>
               <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
-                <GraduationCap className="h-4 w-4 text-ink-subtle" />
+                <span className={cn("flex h-6 w-6 items-center justify-center rounded-md text-white", c.bg)}>
+                  <GraduationCap className="h-3.5 w-3.5" />
+                </span>
                 {category}
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {catAgents.map((a) => (
-                  <Card key={a.id}>
+                  <Card key={a.id} className={cn("border-t-2", c.border)}>
                     <CardHeader>
                       <CardTitle>{a.name}</CardTitle>
                       <CardDescription>{a.description}</CardDescription>
@@ -63,7 +69,8 @@ export function KnowledgePage() {
                 ))}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

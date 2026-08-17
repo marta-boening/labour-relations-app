@@ -8,10 +8,10 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default: "border-transparent bg-surface-alt text-ink-muted",
-        petrol: "border-transparent bg-petrol-800/10 text-petrol-800",
-        low: "border-transparent bg-[color-mix(in_srgb,var(--color-risk-low)_15%,white)] text-risk-low",
-        medium: "border-transparent bg-[color-mix(in_srgb,var(--color-risk-medium)_18%,white)] text-risk-medium",
-        high: "border-transparent bg-[color-mix(in_srgb,var(--color-risk-high)_12%,white)] text-risk-high",
+        petrol: "border-transparent bg-petrol-700/12 text-petrol-800",
+        low: "border-transparent bg-[color-mix(in_srgb,var(--color-risk-low)_18%,white)] text-[color-mix(in_srgb,var(--color-risk-low)_75%,black)]",
+        medium: "border-transparent bg-[color-mix(in_srgb,var(--color-risk-medium)_22%,white)] text-[color-mix(in_srgb,var(--color-risk-medium)_75%,black)]",
+        high: "border-transparent bg-[color-mix(in_srgb,var(--color-risk-high)_16%,white)] text-[color-mix(in_srgb,var(--color-risk-high)_80%,black)]",
         outline: "border-border text-ink-muted",
       },
     },

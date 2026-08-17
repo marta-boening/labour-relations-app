@@ -15,19 +15,27 @@
   --color-ink-muted: #5a5a56;
   --color-ink-subtle: #8a8a85;
 
-  /* Petrol-Sidebar (aus Mockup) */
-  --color-petrol-950: #0e2422;
-  --color-petrol-900: #15332f;
-  --color-petrol-800: #1c3d3a;
-  --color-petrol-700: #244d48;
-  --color-petrol-600: #2f6058;
-  --color-petrol-500: #3d786e;
-  --color-petrol-tint: #a9c4bd;
+  /* Petrol-Sidebar — sattes, blaustichiges Petrol (nicht Grau-Grün) wie im Mockup */
+  --color-petrol-950: #072220;
+  --color-petrol-900: #0b332f;
+  --color-petrol-800: #0e4640;
+  --color-petrol-700: #135e54;
+  --color-petrol-600: #1a7b6c;
+  --color-petrol-500: #24a189;
+  --color-petrol-tint: #bfe0d5;
 
-  /* Status / Risiko */
-  --color-risk-low: #4caf50;
-  --color-risk-medium: #e2a53a;
-  --color-risk-high: #c0392b;
+  /* Status / Risiko — kräftig, nicht blass */
+  --color-risk-low: #2f9e58;
+  --color-risk-medium: #d9922e;
+  --color-risk-high: #c23b2f;
+
+  /* Kategorie-Akzentfarben — 6 Kategorien aus der Prompt-Bibliothek, für Karten/Badges/Icons */
+  --color-cat-strategie: #1a7b6c;
+  --color-cat-compliance: #b8863c;
+  --color-cat-betriebsrat: #3d5a99;
+  --color-cat-verhandlung: #7a4f8c;
+  --color-cat-arbeitsrecht: #b8583c;
+  --color-cat-hr-management: #4a7c4e;
 
   --radius-lg: 16px;
   --radius-md: 10px;

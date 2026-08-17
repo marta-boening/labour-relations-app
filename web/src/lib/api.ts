@@ -1,4 +1,8 @@
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) || "http://localhost:3001";
+// Ohne VITE_API_BASE_URL: relative Pfade ("/api/...") — funktioniert automatisch sowohl in
+// Produktion (Server liefert Frontend + API von derselben Adresse) als auch lokal, wenn der
+// gebaute Build direkt vom Express-Server ausgeliefert wird. Nur der separate Vite-Dev-Server
+// (anderer Port) braucht die explizite absolute URL aus web/.env.
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) || "";
 
 export interface ChatResponse {
   output: string;

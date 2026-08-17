@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { categoryColor, initials } from "@/lib/categoryColors";
 
 export function PromptsPage() {
   const navigate = useNavigate();
@@ -17,6 +18,12 @@ export function PromptsPage() {
   const promptToAgent = React.useMemo(() => {
     const map = new Map<string, string>();
     agentsData?.agents.forEach((a) => a.prompts.forEach((p) => map.set(p.id, a.name)));
+    return map;
+  }, [agentsData]);
+
+  const promptToCategory = React.useMemo(() => {
+    const map = new Map<string, string>();
+    agentsData?.agents.forEach((a) => a.prompts.forEach((p) => map.set(p.id, a.category)));
     return map;
   }, [agentsData]);
 
@@ -49,20 +56,24 @@ export function PromptsPage() {
       </header>
 
       <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface-alt px-6 py-3">
-        {categories.map((c) => (
-          <button
-            key={c}
-            onClick={() => setCategory(c)}
-            className={cn(
-              "rounded-full border px-3 py-1 text-xs font-medium transition",
-              category === c
-                ? "border-petrol-800 bg-petrol-800 text-white"
-                : "border-border bg-surface text-ink-muted hover:border-border-hover"
-            )}
-          >
-            {c}
-          </button>
-        ))}
+        {categories.map((c) => {
+          const active = category === c;
+          const isAll = c === "Alle";
+          return (
+            <button
+              key={c}
+              onClick={() => setCategory(c)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs font-medium transition",
+                !active && "border-border bg-surface text-ink-muted hover:border-border-hover",
+                active && isAll && "border-ink bg-ink text-white",
+                active && !isAll && cn(categoryColor(c).bg, categoryColor(c).border, "text-white")
+              )}
+            >
+              {c}
+            </button>
+          );
+        })}
         <span className="mx-2 h-4 w-px bg-border" />
         {(["alle", "quick", "full"] as const).map((d) => (
           <button
@@ -83,11 +94,24 @@ export function PromptsPage() {
       <div className="flex-1 overflow-y-auto p-6">
         {isLoading && <div className="text-sm text-ink-subtle">Lädt Prompt-Katalog…</div>}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((p) => (
+          {filtered.map((p) => {
+            const cat = promptToCategory.get(p.id) ?? "";
+            const c = categoryColor(cat);
+            return (
             <Card key={p.id} className="flex flex-col">
               <CardHeader>
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle>{p.name}</CardTitle>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-semibold text-white",
+                        c.bg
+                      )}
+                    >
+                      {initials(promptToAgent.get(p.id) ?? p.name)}
+                    </div>
+                    <CardTitle>{p.name}</CardTitle>
+                  </div>
                   <Badge variant={p.depth === "quick" ? "outline" : "petrol"}>{p.depth}</Badge>
                 </div>
                 <CardDescription>{p.hint}</CardDescription>
@@ -110,7 +134,8 @@ export function PromptsPage() {
                 </Button>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
