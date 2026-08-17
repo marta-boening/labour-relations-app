@@ -1,6 +1,10 @@
 # Technische Dokumentation — Labour Relations App
 
-Stand: 2026-08-17
+Stand: 2026-08-17 (live deployed)
+
+**Live-URL:** https://labour-relations-app.onrender.com — Gratis-Tarif, schläft nach 15 Min.
+Inaktivität ein (erster Aufruf danach ~30–60s).
+**Code:** https://github.com/marta-boening/labour-relations-app
 
 > **Hinweis zu Secrets:** Dieses Dokument enthält bewusst **keine echten API-Schlüssel,
 > Passwörter oder Tokens** — nur die Namen der benötigten Umgebungsvariablen. Die
@@ -98,6 +102,7 @@ kein Auth nötig da das Repo öffentlich ist. Siehe `fetchGithubRawText()` in
 | `/api/chat` | POST | Nimmt `{ message, sessionId, userId }` entgegen, gibt `{ output, html, answerHtml, promptId, promptUsed, suggestedNextPrompts, escalation, ... }` zurück. Schreibt zusätzlich best-effort einen Case-Datensatz nach Supabase (falls konfiguriert). |
 | `/api/prompts` | GET | Gibt den vollständigen Prompt-Katalog zurück (`getMetadata()`, GitHub-gecacht) — Grundlage der Prompts/Bibliothek-Seite |
 | `/api/agents` | GET | Gibt die 14 kuratierten Agenten zurück, angereichert mit Prompt-Details und (falls Supabase konfiguriert) echten Fallzahlen je Agent |
+| — | — | `knowledge_items` (Wissen/"Meine Ablage") wird direkt vom Frontend über den Supabase-Client gelesen/geschrieben (RLS), nicht über eine eigene Server-Route |
 | `/*` (alles außer `/api/*`) | GET | SPA-Fallback: liefert `web/dist/index.html`, damit React-Router-Routen (`/agents`, `/prompts`, …) auch bei direktem Aufruf/Reload funktionieren (nur aktiv, wenn `web/dist` existiert) |
 
 Alle Routen liegen hinter HTTP Basic Auth, sobald `APP_USERNAME`/`APP_PASSWORD`
@@ -148,9 +153,11 @@ Frontend (`web/.env`, siehe `web/.env.example` — separat von `server/.env`, da
   den jetzigen Einzelnutzer-/Kleinteam-Betrieb ausreichend, für echten Mehrbenutzerbetrieb später
   nachzurüsten.
 - **Row Level Security:** Die `cases`/`profiles`-Tabellen (siehe `supabase/migrations/0001_init.sql`)
-  sind per RLS auf `auth.uid() = user_id` beschränkt — ein Nutzer sieht ausschließlich eigene
-  Fälle. Das Backend schreibt mit dem Service-Role-Key (umgeht RLS bewusst, analog zum
-  bestehenden Qdrant-Store-Muster).
+  sowie `knowledge_items` (siehe `supabase/migrations/0002_knowledge.sql`) sind per RLS auf
+  `auth.uid() = user_id` beschränkt — ein Nutzer sieht ausschließlich eigene Daten. Das Backend
+  schreibt Cases mit dem Service-Role-Key (umgeht RLS bewusst, analog zum bestehenden
+  Qdrant-Store-Muster); `knowledge_items` wird ausschließlich vom Frontend mit dem anon Key
+  gelesen/geschrieben — dort greift RLS ungefiltert.
 
 ## 7. Zustandsspeicherung (State)
 
@@ -162,6 +169,7 @@ Frontend (`web/.env`, siehe `web/.env.example` — separat von `server/.env`, da
 | Einzelne Prompt-Dateien (.md) | In-Memory-Cache, TTL 30 Min. | Wird periodisch neu von GitHub geladen |
 | Frühere Fälle (Frage+Antwort+Embedding, für RAG-Ähnlichkeitssuche) | Qdrant Cloud, Collection `lr_cases` | Dauerhaft, überlebt Server-Neustarts |
 | Strukturierte Fallhistorie (fürs Frontend: Verlauf/Fälle, Risiko-Radar, Agenten-Kennzahlen) | Supabase, Tabelle `cases` (optional) | Dauerhaft, falls Supabase konfiguriert — sonst bleibt die Historie leer |
+| Eigene Wissensquellen (Wissen → "Meine Ablage") | Supabase, Tabelle `knowledge_items` (optional) | Dauerhaft, RLS-geschützt pro Nutzer |
 
 Da Session-Daten nur im Arbeitsspeicher liegen, funktioniert das **nur mit einer
 einzigen laufenden Server-Instanz**. Bei horizontaler Skalierung (mehrere Instanzen
@@ -188,19 +196,25 @@ Chatbot_n8n_Agent/
 ├── .gitignore
 ├── supabase/
 │   └── migrations/
-│       └── 0001_init.sql        Schema: cases, profiles, RLS-Policies
+│       ├── 0001_init.sql        Schema: cases, profiles, RLS-Policies
+│       └── 0002_knowledge.sql   Schema: knowledge_items ("Meine Ablage"), RLS-Policies
 ├── web/                          React-Frontend (Vite + TypeScript + Tailwind)
 │   ├── .env.example              Vorlage für VITE_*-Variablen
 │   ├── src/
 │   │   ├── App.tsx                Routing (7 Bereiche) + Auth-Gate
+│   │   ├── index.css              Design-Tokens: Sand-/Petrol-Palette, 6 Kategorie-Akzentfarben,
+│   │   │                          Risiko-Farben (Tailwind v4 @theme, siehe Abschnitt 12)
 │   │   ├── components/AppShell.tsx  Sidebar-Layout (Petrol-Sand)
-│   │   ├── components/ui/         Button/Card/Badge/Input (shadcn-Stil)
+│   │   ├── components/ui/         Button/Card/Badge/Input/Tabs (shadcn-Stil)
 │   │   ├── lib/api.ts             Fetch-Wrapper für /api/chat, /api/prompts, /api/agents
 │   │   ├── lib/cases.ts           Supabase-Query für die Fallhistorie
+│   │   ├── lib/knowledge.ts       Supabase-Query für knowledge_items (CRUD)
+│   │   ├── lib/categoryColors.ts  Kategorie → Farb-Klassen-Zuordnung (Agenten/Prompts/Wissen)
 │   │   ├── lib/supabaseClient.ts  Supabase-Client (anon Key)
 │   │   ├── lib/useAuth.tsx        Auth-Context (Supabase Auth, Fallback-Einzelnutzer-Modus)
-│   │   └── pages/                 ChatPage, CasesPage, PromptsPage, AgentsPage,
-│   │                               RiskRadarPage, KnowledgePage, SettingsPage
+│   │   └── pages/                 ChatPage, CasesPage, PromptsPage, AgentsPage (SVG-Netzwerk-
+│   │                               Diagramm), RiskRadarPage, KnowledgePage (Tabs: Ablage/
+│   │                               Fachgebiete), SettingsPage
 │   └── dist/                      Produktions-Build (generiert, nicht in Git)
 └── server/
     ├── .env.example             Vorlage für Umgebungsvariablen (keine echten Werte)
@@ -229,7 +243,26 @@ Gehostet auf **Render** (Web Service):
 - Ohne Build-Schritt für `web/` (z.B. bei einem noch nicht angepassten Deployment) liefert der
   Server automatisch `chat.html` als Fallback aus — kein harter Bruch.
 
-## 11. Bekannte Grenzen
+## 12. Design-System
+
+Alle Farben sind als CSS-Custom-Properties in `web/src/index.css` unter `@theme` definiert
+(Tailwind v4 generiert daraus automatisch Utility-Klassen wie `bg-petrol-800`, `text-cat-strategie`,
+`fill-cat-compliance` — auch für SVG). Wer die Optik überarbeitet (z.B. mit einem externen
+Design-Tool), sollte hier ansetzen statt Farben in einzelnen Komponenten zu verstreuen:
+
+- `--color-sand`, `--color-surface*`, `--color-ink*`, `--color-border*` — Grundpalette (aus dem
+  ursprünglichen `chat.html` übernommen)
+- `--color-petrol-950` bis `--color-petrol-500`, `--color-petrol-tint` — Sidebar/Akzent
+- `--color-risk-low/medium/high` — Risiko-Badges
+- `--color-cat-strategie/compliance/betriebsrat/verhandlung/arbeitsrecht/hr-management` — die 6
+  Kategorie-Akzentfarben, zentral zugeordnet in `web/src/lib/categoryColors.ts`
+  (`categoryColor(category)` liefert `{ bg, text, border }`-Klassen)
+
+Wiederverwendbare UI-Bausteine liegen in `web/src/components/ui/` (Button, Card, Badge, Input,
+Tabs) im shadcn/ui-Stil (cva + Radix-Primitives) — neue Komponenten sollten diesem Muster folgen,
+damit ein Redesign an einer Stelle (den Tokens) durchschlägt statt an vielen einzelnen Dateien.
+
+## 13. Bekannte Grenzen
 
 - Kein Backend-seitiger Multi-User-Zugriffsschutz über Basic Auth hinaus (Supabase Auth schützt
   nur, welche Daten das Frontend anzeigt/schreibt — nicht die API-Routen selbst)

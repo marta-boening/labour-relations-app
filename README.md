@@ -6,6 +6,8 @@ Portierung des ursprünglichen n8n-Workflows ("Labour Relations Multiagent_final
 direkt als Node.js-Server. Frontend ist eine React-App (`web/`), optional mit Supabase als
 Nutzer-/Falldatenbank.
 
+**Live:** https://labour-relations-app.onrender.com · **Vollständige technische Doku:** [TECHNICAL.md](TECHNICAL.md)
+
 ## Starten (lokale Entwicklung, zwei Prozesse)
 
 ```bash
@@ -55,7 +57,10 @@ pkill -f "node src/index.js"
 - `server/src/agentCatalog.js` — Bündelung der 34 Fach-Prompts zu 14 Agenten für die
   Agenten-Netzwerk-Ansicht (reine Präsentationsschicht, keine Ausführungslogik)
 - `server/src/supabaseClient.js` — schreibt Case-Datensätze nach Supabase (best-effort, optional)
-- `supabase/migrations/0001_init.sql` — Schema für `cases`/`profiles` inkl. RLS
+- `supabase/migrations/` — `0001_init.sql` (Schema `cases`/`profiles`), `0002_knowledge.sql`
+  (Schema `knowledge_items` für Wissen → "Meine Ablage"), jeweils inkl. RLS
+- `web/src/index.css` + `web/src/lib/categoryColors.ts` — Design-Tokens (Petrol-/Sand-/
+  Kategorie-Farben), Details in `TECHNICAL.md` Abschnitt 12
 - `server/.env` — API-Keys (nicht in Git, siehe `.env.example` für die benötigten Variablen)
 
 ## Bekannte Grenzen
