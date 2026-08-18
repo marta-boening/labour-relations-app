@@ -451,7 +451,13 @@ function appendSessionMessages(sessionId, newMessages) {
   sessionMemory.set(sessionId, updated);
 }
 
-async function runExecutor(systemPrompt, userQuestion, sessionId) {
+// emit(payload) wird während der Generierung aufgerufen — { type: "delta", text } für jedes
+// Text-Stück (streamt die Antwort live zum Frontend statt sie am Stück nach 60-180s zu
+// liefern, siehe /api/chat in index.js), { type: "reset" } wenn Text vor einem Tool-Aufruf
+// verworfen wird (der zählt nicht zur finalen Antwort), { type: "tool" } während einer
+// Perplexity-Recherche. Ohne Streaming würde die Verbindung bei langen Vollanalysen oft
+// Renders eigenes Gateway-Zeitlimit überschreiten (502), unabhängig vom Token-Limit.
+async function runExecutor(systemPrompt, userQuestion, sessionId, emit = () => {}) {
   const tools = [
     {
       name: "perplexity_web_research",
@@ -477,19 +483,26 @@ async function runExecutor(systemPrompt, userQuestion, sessionId) {
   let truncated = false;
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-    const response = await anthropic.messages.create({
+    const stream = anthropic.messages.stream({
       model: EXECUTOR_MODEL,
       max_tokens: EXECUTOR_MAX_TOKENS,
       system: systemPrompt,
       messages,
       tools,
     });
+    stream.on("text", (delta) => emit({ type: "delta", text: delta }));
+
+    const response = await stream.finalMessage();
 
     if (response.stop_reason === "tool_use") {
+      // Eventuell schon gestreamter Text vor dem Tool-Aufruf gehört nicht zur finalen Antwort
+      // (entspricht dem bisherigen "finalText = ''" beim nicht-streamenden Vorgänger).
+      emit({ type: "reset" });
       messages.push({ role: "assistant", content: response.content });
       const toolResults = [];
       for (const block of response.content) {
         if (block.type === "tool_use") {
+          emit({ type: "tool", query: block.input.searchQuery });
           const result = await callPerplexity(block.input.searchQuery);
           toolResults.push({ type: "tool_result", tool_use_id: block.id, content: result });
         }
@@ -581,7 +594,11 @@ function formatOutput(rawAnswer, routing) {
 const pinnedPrompts = new Map();
 
 // ── Orchestrierung (entspricht dem gesamten n8n-Workflow) ──────────────────
-export async function handleChatMessage({ userQuestion, sessionId, userId, promptId }) {
+// onEvent(payload): optionaler Callback für Streaming — wird während der Executor-Generierung
+// mit { type: "delta", text } / { type: "reset" } / { type: "tool" } aufgerufen (siehe
+// runExecutor). Bleibt der Callback weg, läuft alles wie zuvor, nur ohne Zwischenereignisse.
+export async function handleChatMessage({ userQuestion, sessionId, userId, promptId, onEvent }) {
+  const emit = onEvent || (() => {});
   const metadata = await getMetadata();
 
   if (promptId) {
@@ -592,7 +609,7 @@ export async function handleChatMessage({ userQuestion, sessionId, userId, promp
   if (pinnedPromptId) {
     const routing = buildDirectRouting(pinnedPromptId, metadata, userQuestion);
     if (routing) {
-      return runExecution({ routing, metadata, userQuestion, sessionId, userId });
+      return runExecution({ routing, metadata, userQuestion, sessionId, userId, emit });
     }
     // Unbekannte/ungültige promptId (z.B. veralteter Katalogstand) → normal weiterrouten.
     pinnedPrompts.delete(sessionId);
@@ -621,10 +638,10 @@ export async function handleChatMessage({ userQuestion, sessionId, userId, promp
     return formatClarification(routing);
   }
 
-  return runExecution({ routing, metadata, userQuestion: effectiveQuestion, sessionId, userId });
+  return runExecution({ routing, metadata, userQuestion: effectiveQuestion, sessionId, userId, emit });
 }
 
-async function runExecution({ routing, metadata, userQuestion, sessionId, userId }) {
+async function runExecution({ routing, metadata, userQuestion, sessionId, userId, emit }) {
   const effectiveQuestion = userQuestion;
 
   const [mdContent, embedding] = await Promise.all([
@@ -635,7 +652,7 @@ async function runExecution({ routing, metadata, userQuestion, sessionId, userId
   const qdrantPoints = await qdrantRetrieve(embedding, userId);
   const systemPrompt = buildSystemPrompt(mdContent, routing, metadata, qdrantPoints);
 
-  const rawAnswer = await runExecutor(systemPrompt, effectiveQuestion, sessionId);
+  const rawAnswer = await runExecutor(systemPrompt, effectiveQuestion, sessionId, emit);
   const formatted = formatOutput(rawAnswer, routing);
 
   await qdrantStore({

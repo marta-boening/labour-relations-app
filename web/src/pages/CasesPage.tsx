@@ -1,9 +1,11 @@
 import * as React from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { History, ChevronRight } from "lucide-react";
+import { History, ChevronRight, MessageSquarePlus } from "lucide-react";
 import { fetchCases, type CaseRow } from "@/lib/cases";
 import { useAuth } from "@/lib/useAuth";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("de-DE", {
@@ -16,6 +18,7 @@ function formatDate(iso: string) {
 }
 
 export function CasesPage() {
+  const navigate = useNavigate();
   const { configured } = useAuth();
   const { data: cases, isLoading } = useQuery({
     queryKey: ["cases"],
@@ -81,8 +84,29 @@ export function CasesPage() {
             </div>
           ) : (
             <div className="mx-auto max-w-2xl">
-              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-subtle">
-                {selected.prompt_name || selected.prompt_id}
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
+                  {selected.prompt_name || selected.prompt_id}
+                </div>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() =>
+                    navigate("/chat", {
+                      state: {
+                        promptId: selected.prompt_id,
+                        promptName: selected.prompt_name ?? selected.prompt_id,
+                        resumeCase: {
+                          question: selected.question,
+                          answerHtml: selected.answer_html || selected.answer,
+                        },
+                      },
+                    })
+                  }
+                >
+                  <MessageSquarePlus className="h-3.5 w-3.5" />
+                  Fall fortsetzen
+                </Button>
               </div>
               <h1 className="mb-4 text-lg font-semibold text-ink">
                 {selected.title || "Fall"}

@@ -61,6 +61,10 @@ if (WEB_BUILD_AVAILABLE) {
   app.use(express.static(PROJECT_ROOT, { index: "chat.html" }));
 }
 
+// Server-Sent Events statt einer einzelnen JSON-Antwort: liefert die Executor-Antwort live
+// Wort für Wort aus, statt am Stück nach 60-180s. Löst zwei Probleme zugleich — Renders
+// eigenes Gateway-Zeitlimit (502 bei sehr langen Vollanalysen, unabhängig vom Token-Limit)
+// und die lange Wartezeit ohne jede Rückmeldung im Frontend.
 app.post("/api/chat", async (req, res) => {
   const { message, sessionId, userId, promptId } = req.body || {};
   if (!message || typeof message !== "string" || !message.trim()) {
@@ -72,6 +76,14 @@ app.post("/api/chat", async (req, res) => {
 
   const effectiveUserId = userId || "marta-boening";
 
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no", // falls ein Reverse-Proxy davor puffert (z.B. bei Render)
+  });
+  const send = (payload) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
+
   try {
     const result = await handleChatMessage({
       userQuestion: message.trim(),
@@ -80,8 +92,10 @@ app.post("/api/chat", async (req, res) => {
       // Wenn gesetzt (Nutzer kam über "Prompt starten"/"Fall an X übergeben"): Router für die
       // gesamte Session überspringen, siehe pinnedPrompts in pipeline.js.
       promptId: typeof promptId === "string" && promptId.trim() ? promptId.trim() : undefined,
+      onEvent: send,
     });
-    res.json(result);
+    send({ type: "done", ...result });
+    res.end();
 
     // Case-Historie für Verlauf/Fälle, Risiko-Radar, Agenten-Kennzahlen — darf die bereits
     // gesendete Antwort nicht verzögern oder blockieren (best-effort, wie qdrantStore()).
@@ -90,7 +104,8 @@ app.post("/api/chat", async (req, res) => {
     );
   } catch (err) {
     console.error("Fehler in handleChatMessage:", err);
-    res.status(500).json({ output: `Fehler bei der Verarbeitung: ${err.message}`, error: true });
+    send({ type: "error", message: `Fehler bei der Verarbeitung: ${err.message}` });
+    res.end();
   }
 });
 

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useLocation } from "react-router-dom";
-import { MessageSquare, Send } from "lucide-react";
+import { MessageSquare, Send, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/useAuth";
 import { sendChatMessage, type ChatResponse } from "@/lib/api";
@@ -11,6 +11,8 @@ interface ChatMessage {
   text: string;
   html?: string;
   isError?: boolean;
+  streaming?: boolean;
+  toolStatus?: string;
   timestamp: string;
   suggestedNextPrompts?: { id: string; label: string }[];
   escalation?: { suggested: boolean; target: string | null; reason: string | null };
@@ -44,13 +46,19 @@ export function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  // Von der Prompts- oder Agenten-Seite mit vorbelegtem Kontext + gewähltem Prompt
-  // angesprungen (navigate("/chat", { state: { prefill, promptId, promptName } })).
-  // Ist promptId gesetzt, bleibt die gesamte Session direkt an diesen Prompt gebunden —
-  // kein Router-Aufruf, keine Klärungsschleife (siehe pinnedPrompts in pipeline.js).
+  // Von der Prompts-/Agenten-Seite mit vorbelegtem Kontext + gewähltem Prompt angesprungen
+  // (navigate("/chat", { state: { prefill, promptId, promptName } })), oder von Verlauf/Fälle
+  // mit einem alten Fall zum Fortsetzen (state: { promptId, promptName, resumeCase }).
+  // Ist promptId gesetzt, bleibt die gesamte Session direkt an diesen Prompt gebunden — kein
+  // Router-Aufruf, keine Klärungsschleife (siehe pinnedPrompts in pipeline.js).
   React.useEffect(() => {
     const state = location.state as
-      | { prefill?: string; promptId?: string; promptName?: string }
+      | {
+          prefill?: string;
+          promptId?: string;
+          promptName?: string;
+          resumeCase?: { question: string; answerHtml: string };
+        }
       | null;
     if (state?.prefill) {
       setInput(state.prefill);
@@ -58,6 +66,29 @@ export function ChatPage() {
     }
     if (state?.promptId) {
       setPinnedPrompt({ id: state.promptId, name: state.promptName ?? state.promptId });
+    }
+    if (state?.resumeCase) {
+      // Nur clientseitig sichtbar gemacht — die Antwort kommt aus der gespeicherten
+      // Fallhistorie, nicht neu vom Server. Der Sachverhalt wird der KI dennoch verfügbar,
+      // sobald eine neue Frage gestellt wird: dieselbe Session ist an den Prompt gepinnt und
+      // Qdrant liefert den alten Fall automatisch als RAG-Kontext zurück (gleicher Nutzer,
+      // inhaltlich ähnlich).
+      setMessages([
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          text: state.resumeCase.question,
+          timestamp: "früher",
+        },
+        {
+          id: crypto.randomUUID(),
+          role: "bot",
+          text: state.resumeCase.question,
+          html: state.resumeCase.answerHtml,
+          timestamp: "früher",
+        },
+      ]);
+      requestAnimationFrame(() => textareaRef.current?.focus());
     }
     window.history.replaceState({}, "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,6 +101,10 @@ export function ChatPage() {
     setInput("");
   }
 
+  function updateMessage(id: string, patch: Partial<ChatMessage>) {
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  }
+
   async function send(text: string) {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
@@ -77,43 +112,48 @@ export function ChatPage() {
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
+    const botId = crypto.randomUUID();
     setMessages((prev) => [
       ...prev,
       { id: crypto.randomUUID(), role: "user", text: trimmed, timestamp: now() },
+      { id: botId, role: "bot", text: "", streaming: true, timestamp: now() },
     ]);
     setLoading(true);
 
     try {
-      const data: ChatResponse = await sendChatMessage({
-        message: trimmed,
-        sessionId,
-        userId,
-        promptId: pinnedPrompt?.id,
-      });
+      const data: ChatResponse = await sendChatMessage(
+        { message: trimmed, sessionId, userId, promptId: pinnedPrompt?.id },
+        (event) => {
+          if (event.type === "delta") {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === botId ? { ...m, text: m.text + event.text, toolStatus: undefined } : m
+              )
+            );
+          } else if (event.type === "reset") {
+            updateMessage(botId, { text: "", toolStatus: undefined });
+          } else if (event.type === "tool") {
+            updateMessage(botId, { toolStatus: event.query });
+          }
+        }
+      );
       if (pinnedPrompt && data.promptUsed && data.promptUsed !== pinnedPrompt.name) {
         setPinnedPrompt({ id: pinnedPrompt.id, name: data.promptUsed });
       }
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "bot",
-          text: data.output ?? "(leere Antwort)",
-          html: data.answerHtml ?? data.html,
-          timestamp: now(),
-          suggestedNextPrompts: data.suggestedNextPrompts,
-          escalation: data.escalation,
-        },
-      ]);
+      updateMessage(botId, {
+        text: data.output ?? "(leere Antwort)",
+        html: data.answerHtml ?? data.html,
+        streaming: false,
+        toolStatus: undefined,
+        suggestedNextPrompts: data.suggestedNextPrompts,
+        escalation: data.escalation,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const friendly = message.includes("Failed to fetch")
         ? "Verbindung zum Server fehlgeschlagen. Läuft der Server (npm start in server/)?"
         : `Fehler: ${message}`;
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: "bot", text: friendly, isError: true, timestamp: now() },
-      ]);
+      updateMessage(botId, { text: friendly, isError: true, streaming: false, toolStatus: undefined });
     } finally {
       setLoading(false);
       textareaRef.current?.focus();
@@ -182,7 +222,6 @@ export function ChatPage() {
           <MessageRow key={m.id} message={m} onFollowUp={send} />
         ))}
 
-        {loading && <TypingRow />}
         <div ref={messagesEndRef} />
       </div>
 
@@ -244,7 +283,18 @@ function MessageRow({
             message.isError && "border-[#ffd5d5] bg-[#fff5f5] text-risk-high"
           )}
         >
-          {message.html && !message.isError ? (
+          {message.streaming ? (
+            message.toolStatus ? (
+              <span className="flex items-center gap-1.5 text-ink-muted">
+                <Search className="h-3.5 w-3.5 shrink-0 animate-pulse" />
+                Recherchiert: „{message.toolStatus}"…
+              </span>
+            ) : message.text ? (
+              <span className="whitespace-pre-wrap">{message.text}</span>
+            ) : (
+              <TypingDots />
+            )
+          ) : message.html && !message.isError ? (
             <div className="prose-answer" dangerouslySetInnerHTML={{ __html: message.html }} />
           ) : (
             message.text
@@ -295,21 +345,16 @@ function FollowUps({
   );
 }
 
-function TypingRow() {
+function TypingDots() {
   return (
-    <div className="flex items-end gap-2.5">
-      <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-ink text-[11px] font-semibold text-white">
-        LR
-      </div>
-      <div className="flex items-center gap-[5px] rounded-2xl rounded-bl-[10px] border border-border bg-surface px-[18px] py-3.5 shadow-sm">
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-subtle"
-            style={{ animationDelay: `${i * 0.18}s` }}
-          />
-        ))}
-      </div>
-    </div>
+    <span className="flex items-center gap-[5px] py-0.5">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-subtle"
+          style={{ animationDelay: `${i * 0.18}s` }}
+        />
+      ))}
+    </span>
   );
 }
