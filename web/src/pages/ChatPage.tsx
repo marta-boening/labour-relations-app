@@ -159,7 +159,7 @@ export function ChatPage() {
         {
           id: crypto.randomUUID(),
           role: "bot",
-          text: state.resumeCase.question,
+          text: state.resumeCase.answerHtml,
           html: state.resumeCase.answerHtml,
           timestamp: "früher",
         },

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Users, Sparkles, Scale, Clock, X, ChevronDown, MessageSquare } from "lucide-react";
+import { Users, Sparkles, Scale, Clock, X, MessageSquare } from "lucide-react";
 import { fetchAgents, type AgentSummary } from "@/lib/api";
 import { fetchCases } from "@/lib/cases";
 import { useAuth } from "@/lib/useAuth";
@@ -243,9 +243,13 @@ function AgentDetailCard({
   onClose: () => void;
   onStartChat: (prompt: { id: string; name: string; hint: string }) => void;
 }) {
-  const [expanded, setExpanded] = React.useState(false);
+  // Bei genau einem Prompt ist die Wahl eindeutig — Direkt-Button. Bei mehreren würde ein
+  // "primärer" Prompt geraten werden müssen (z.B. per Zufall/Reihenfolge in agentCatalog.js),
+  // was nicht zuverlässig zum tatsächlichen Anliegen passt (siehe agentCatalog.js: die
+  // Reihenfolge ist keine Relevanz-Sortierung). Deshalb bei mehreren Prompts direkt die
+  // Auswahl zeigen, statt falsch zu raten.
   const c = categoryColor(agent.category);
-  const primaryPrompt = agent.prompts.find((p) => p.depth === "full") ?? agent.prompts[0];
+  const singlePrompt = agent.prompts.length === 1 ? agent.prompts[0] : null;
 
   return (
     <div className="mx-auto mt-4 max-w-lg rounded-2xl border border-border bg-surface p-5 shadow-sm">
@@ -279,40 +283,35 @@ function AgentDetailCard({
         <span>{agent.caseCount} bearbeitete Fälle</span>
       </div>
 
-      {primaryPrompt && (
+      {singlePrompt ? (
         <Button
           variant="primary"
           className="mt-4 w-full"
-          onClick={() => onStartChat(primaryPrompt)}
+          onClick={() => onStartChat(singlePrompt)}
         >
           <MessageSquare className="h-4 w-4" />
           Neuen Fall an {agent.name} übergeben
         </Button>
-      )}
-
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="mt-4 flex w-full items-center justify-between text-xs font-medium text-ink-muted hover:text-ink"
-      >
-        Alle {agent.promptCount} Prompts dieses Agenten
-        <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
-      </button>
-
-      {expanded && (
-        <div className="mt-2 flex flex-col gap-2">
-          {agent.prompts.map((p) => (
-            <div key={p.id} className="rounded-lg border border-border bg-surface-alt p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-ink">{p.name}</span>
-                <Badge variant="outline">{p.depth}</Badge>
+      ) : (
+        <>
+          <p className="mt-4 text-xs font-medium text-ink-muted">
+            Dieser Agent bündelt {agent.promptCount} Prompts — welcher passt am besten?
+          </p>
+          <div className="mt-2 flex flex-col gap-2">
+            {agent.prompts.map((p) => (
+              <div key={p.id} className="rounded-lg border border-border bg-surface-alt p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-ink">{p.name}</span>
+                  <Badge variant="outline">{p.depth}</Badge>
+                </div>
+                <p className="mt-1 text-[11px] text-ink-muted">{p.hint}</p>
+                <Button size="sm" variant="outline" className="mt-2" onClick={() => onStartChat(p)}>
+                  Mit diesem Prompt chatten
+                </Button>
               </div>
-              <p className="mt-1 text-[11px] text-ink-muted">{p.hint}</p>
-              <Button size="sm" variant="outline" className="mt-2" onClick={() => onStartChat(p)}>
-                Mit diesem Prompt chatten
-              </Button>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
