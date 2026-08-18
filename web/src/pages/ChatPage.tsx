@@ -1,9 +1,16 @@
 import * as React from "react";
 import { useLocation } from "react-router-dom";
-import { MessageSquare, Send, Search } from "lucide-react";
+import { MessageSquare, Send, Search, Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/useAuth";
 import { sendChatMessage, type ChatResponse } from "@/lib/api";
+
+// Web Speech API — im TS-DOM-Lib nicht standardisiert, daher lose typisiert. Chrome/Edge/Safari
+// unterstützen sie (unter dem webkit-Präfix), Firefox nicht — Mic-Button wird dann deaktiviert.
+const SpeechRecognitionCtor: any =
+  typeof window !== "undefined"
+    ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    : null;
 
 interface ChatMessage {
   id: string;
@@ -39,8 +46,77 @@ export function ChatPage() {
   const [input, setInput] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [pinnedPrompt, setPinnedPrompt] = React.useState<PinnedPrompt | null>(null);
+  const [isRecording, setIsRecording] = React.useState(false);
+  const [micError, setMicError] = React.useState<string | null>(null);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = React.useRef<any>(null);
+  const dictationBaseRef = React.useRef("");
+
+  // Diktieren per Mikrofon (Web Speech API) — 1:1 aus dem alten chat.html übernommen, das
+  // beim Umbau auf React versehentlich nicht mit portiert wurde.
+  React.useEffect(() => {
+    if (!SpeechRecognitionCtor) return;
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = "de-DE";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onresult = (e: any) => {
+      let finalTranscript = "";
+      let interimTranscript = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const transcript = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalTranscript += transcript;
+        else interimTranscript += transcript;
+      }
+      if (finalTranscript) {
+        dictationBaseRef.current =
+          (dictationBaseRef.current ? dictationBaseRef.current + " " : "") + finalTranscript.trim();
+      }
+      setInput((dictationBaseRef.current + " " + interimTranscript).trim());
+    };
+    recognition.onend = () => setIsRecording(false);
+    recognition.onerror = (e: any) => {
+      setIsRecording(false);
+      const messages: Record<string, string> = {
+        "not-allowed": "Mikrofon-Zugriff wurde verweigert. Bitte in den Browser-Einstellungen erlauben.",
+        "no-speech": "Keine Sprache erkannt.",
+        "audio-capture": "Kein Mikrofon gefunden.",
+      };
+      setMicError(messages[e.error] || `Diktieren fehlgeschlagen: ${e.error}`);
+      setTimeout(() => setMicError(null), 4000);
+    };
+
+    recognitionRef.current = recognition;
+    return () => {
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      try {
+        recognition.stop();
+      } catch {
+        // bereits gestoppt — kein Problem
+      }
+    };
+  }, []);
+
+  function toggleRecording() {
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+    if (isRecording) {
+      recognition.stop();
+      return;
+    }
+    dictationBaseRef.current = input.trim();
+    setMicError(null);
+    setIsRecording(true);
+    try {
+      recognition.start();
+    } catch {
+      setIsRecording(false);
+    }
+  }
 
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -239,6 +315,26 @@ export function ChatPage() {
             className="max-h-[130px] min-h-[44px] flex-1 resize-none rounded-full border border-border bg-sand px-[18px] py-[11px] text-sm text-ink outline-none placeholder:text-ink-subtle focus:border-border-hover focus:ring-2 focus:ring-petrol-600/15 disabled:opacity-60"
           />
           <button
+            onClick={toggleRecording}
+            disabled={!SpeechRecognitionCtor || loading}
+            title={
+              !SpeechRecognitionCtor
+                ? "Diktieren wird von diesem Browser nicht unterstützt (z.B. Chrome, Edge oder Safari verwenden)"
+                : isRecording
+                  ? "Aufnahme beenden"
+                  : "Diktieren"
+            }
+            className={cn(
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition",
+              isRecording
+                ? "animate-pulse border-risk-high bg-risk-high text-white"
+                : "border-border bg-surface text-ink-muted hover:border-border-hover hover:text-ink",
+              (!SpeechRecognitionCtor || loading) && "cursor-not-allowed opacity-30"
+            )}
+          >
+            <Mic className="h-[18px] w-[18px]" />
+          </button>
+          <button
             onClick={() => send(input)}
             disabled={loading || !input.trim()}
             title="Senden"
@@ -248,7 +344,9 @@ export function ChatPage() {
           </button>
         </div>
         <div className="mt-1.5 text-right text-[11px] text-ink-subtle">
-          Enter zum Senden &nbsp;·&nbsp; Shift+Enter = neue Zeile
+          {micError ?? (isRecording
+            ? "🎙️ Aufnahme läuft … zum Beenden nochmal klicken"
+            : <>Enter zum Senden &nbsp;·&nbsp; Shift+Enter = neue Zeile</>)}
         </div>
       </div>
     </div>
