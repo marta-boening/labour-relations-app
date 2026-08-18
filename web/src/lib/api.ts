@@ -30,7 +30,11 @@ export async function sendChatMessage(params: {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || body.output || `HTTP ${res.status}`);
+    // Backend sendet bei Fehlern { output: "<Fehlertext>", error: true } — error ist ein reines
+    // Bool-Flag, kein Text. body.output enthält die eigentliche, lesbare Fehlermeldung.
+    const message =
+      body.output || (typeof body.error === "string" ? body.error : null) || `HTTP ${res.status}`;
+    throw new Error(message);
   }
   return res.json();
 }

@@ -10,8 +10,7 @@ const EXECUTOR_MODEL = "claude-sonnet-5";
 const MAIN_AGENTS = ["lr-taktiker", "ar-lotse", "br-kompass", "mbr-check"];
 const MEMORY_WINDOW = 10; // entspricht n8n memoryBufferWindow (letzte N Nachrichten)
 const MAX_TOOL_ITERATIONS = 5;
-const EXECUTOR_MAX_TOKENS = 8000; // Balance Geschwindigkeit vs. Ausführlichkeit
-const MAX_CONTINUATIONS = 2; // Sicherheitsnetz falls Claude trotz Limit abschneidet (verhindert stilles Abbrechen)
+const EXECUTOR_MAX_TOKENS = 32000; // hoch genug, dass selbst lange Vollanalysen (BR-Konter etc.) nicht abschneiden
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -475,9 +474,9 @@ async function runExecutor(systemPrompt, userQuestion, sessionId) {
   const messages = [...history, { role: "user", content: userQuestion }];
 
   let finalText = "";
-  let isContinuation = false; // true, sobald die letzte Nachricht ein abgeschnittener Assistant-Text ist
+  let truncated = false;
 
-  for (let i = 0; i < MAX_TOOL_ITERATIONS + MAX_CONTINUATIONS; i++) {
+  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const response = await anthropic.messages.create({
       model: EXECUTOR_MODEL,
       max_tokens: EXECUTOR_MAX_TOKENS,
@@ -487,8 +486,6 @@ async function runExecutor(systemPrompt, userQuestion, sessionId) {
     });
 
     if (response.stop_reason === "tool_use") {
-      finalText = ""; // Tool-Aufruf vor jeglichem Fließtext -> kein Fortsetzungstext offen
-      isContinuation = false;
       messages.push({ role: "assistant", content: response.content });
       const toolResults = [];
       for (const block of response.content) {
@@ -501,27 +498,22 @@ async function runExecutor(systemPrompt, userQuestion, sessionId) {
       continue;
     }
 
-    finalText += response.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    finalText = response.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    messages.push({ role: "assistant", content: finalText });
 
+    // EXECUTOR_MAX_TOKENS ist bewusst hoch gesetzt, damit das praktisch nie vorkommt. Eine
+    // automatische Fortsetzung (frühere Version) ist mit claude-sonnet-5 nicht mehr möglich —
+    // das Modell lehnt eine als Assistant-Nachricht vorbelegte Fortsetzung mit HTTP 400 ab
+    // ("does not support assistant message prefill"). Bei einer verbleibenden Abschneidung
+    // liefern wir die Teilantwort mit Hinweis aus, statt die Anfrage fehlschlagen zu lassen.
     if (response.stop_reason === "max_tokens") {
-      // Antwort wurde mitten im Text abgeschnitten (z.B. bei langen Vollanalysen).
-      // Fortsetzung anfordern: Claude setzt den als Assistant-Nachricht übergebenen
-      // Text nahtlos fort, statt neu anzufangen.
-      if (isContinuation) {
-        messages[messages.length - 1] = { role: "assistant", content: finalText };
-      } else {
-        messages.push({ role: "assistant", content: finalText });
-        isContinuation = true;
-      }
-      continue;
-    }
-
-    if (isContinuation) {
-      messages[messages.length - 1] = { role: "assistant", content: finalText };
-    } else {
-      messages.push({ role: "assistant", content: finalText });
+      truncated = true;
     }
     break;
+  }
+
+  if (truncated) {
+    finalText += "\n\n*(Hinweis: Diese Antwort wurde aufgrund ihrer Länge gekürzt.)*";
   }
 
   appendSessionMessages(sessionId, [
