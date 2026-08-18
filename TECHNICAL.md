@@ -32,7 +32,10 @@ läuft die App unverändert im bisherigen Einzelnutzer-Modus.
 ```
 Browser
    │  React-Frontend (web/, oder Legacy chat.html unter /chat.html)
-   │  POST /api/chat  { message, sessionId, userId }
+   │  POST /api/chat  { message, sessionId, userId, promptId? }
+   │       → Antwort als Server-Sent-Events (text/event-stream), nicht als einzelnes JSON
+   │       → promptId gesetzt: Session bleibt fest an diesen Prompt gebunden (kein Routing
+   │         mehr für die ganze Session, siehe pinnedPrompts weiter unten)
    │  GET  /api/prompts, GET /api/agents  (Prompts/Bibliothek, Agenten-Seite)
    ▼
 Express-Server (server/src/index.js)
@@ -53,9 +56,11 @@ Pipeline (server/src/pipeline.js) — handleChatMessage()
        ├─ 5. getEmbedding()        → Voyage AI: Embedding der Nutzerfrage
        ├─ 6. qdrantRetrieve()      → Qdrant: ähnliche frühere Fälle desselben Nutzers
        ├─ 7. buildSystemPrompt()   → kombiniert Prompt-MD + frühere Fälle + Meta-Anweisungen
-       ├─ 8. runExecutor()         → Anthropic Claude Sonnet, mit Tool-Use-Loop:
-       │                              kann "Perplexity Web Research"-Tool aufrufen
-       │                              (aktuelle Urteile/Gesetze/Statistiken)
+       ├─ 8. runExecutor()         → Anthropic Claude Sonnet, gestreamt (messages.stream()),
+       │                              mit Tool-Use-Loop: kann "Perplexity Web Research"-Tool
+       │                              aufrufen (aktuelle Urteile/Gesetze/Statistiken). Jedes
+       │                              Textstück geht per emit({type:"delta",...}) sofort an
+       │                              den Client raus, statt am Ende der ganzen Generierung.
        ├─ 9. formatOutput()        → extrahiert Meta-Block (Folgeprompts, Eskalation),
        │                              rendert Markdown → HTML (inkl. answerHtml ohne Meta-Anhang
        │                              fürs React-Frontend, das Folgeprompts als Buttons rendert)
@@ -74,6 +79,31 @@ niedriger Confidence auf den plausibelsten Prompt, statt nachzufragen — eine R
 durch; der Fachagent wird angewiesen, fehlende Informationen als transparent gekennzeichnete
 Annahme zu behandeln statt selbst nachzufragen. Echte Rückfragen bleiben nur für Fälle, in denen
 kein Prompt im Katalog auch nur ansatzweise zum Thema passt oder das Thema selbst unklar ist.
+Zusätzlich gibt es einen deterministischen Keyword-Fallback (`keywordFallback()`): wenn der
+Router selbst `prompt_id="clarify"` liefert, wird zuerst geprüft, ob simple Stichwörter in der
+Frage trotzdem einen Prompt nahelegen, bevor tatsächlich geklärt wird.
+
+**Direktes Routing / gepinnte Prompts:** Wählt der Nutzer über Prompts/Bibliothek, Agenten oder
+"Fall fortsetzen" (Verlauf/Fälle) bewusst einen Prompt, wird die `promptId` mit `/api/chat`
+mitgeschickt. `handleChatMessage()` bindet die Session dann über `pinnedPrompts` (In-Memory `Map`,
+Key = `sessionId`) dauerhaft an diesen Prompt — Router, Klärungsschleife und Keyword-Fallback
+werden für den Rest der Session komplett übersprungen (`buildDirectRouting()`). `lowConfidence`
+wird dabei immer erzwungen, damit der Fachagent Rückfragen zu fehlenden Details grundsätzlich
+vermeidet. Ein neuer, offener Chat (Button im Frontend) erzeugt eine neue `sessionId` und hebt
+die Bindung damit auf.
+
+**Streaming:** `runExecutor()` nutzt `anthropic.messages.stream()` statt `.create()` und ruft für
+jedes Textstück einen `emit()`-Callback auf, der bis zu `/api/chat` durchgereicht wird und dort
+als Server-Sent Event (`{type:"delta", text}`) an den Client geht. Grund: Eine lange
+Vollanalyse (Recherche + Denken + Text) kann insgesamt deutlich länger als eine Minute dauern —
+ohne Streaming stand die Verbindung so lange komplett still, dass Renders eigener Gateway-Proxy
+sie mit `502` abgebrochen hat (unabhängig vom Anthropic-`max_tokens`-Limit). Mit kontinuierlich
+fließenden Bytes tritt das nicht mehr auf, und die Nutzerin sieht die Antwort progressiv statt
+nach einer langen stillen Wartezeit. Zusätzliche Event-Typen: `{type:"reset"}` (verwirft Text,
+der vor einem Tool-Aufruf gestreamt wurde und nicht zur finalen Antwort gehört) und
+`{type:"tool", query}` (informiert übers laufende Perplexity-Recherche). Den Abschluss markiert
+`{type:"done", ...formatOutput()-Ergebnis}`, Fehler kommen als `{type:"error", message}` — beides
+weiterhin über denselben Stream, HTTP-Status ist ab `res.writeHead(200, ...)` immer 200.
 
 ## 3. Externe Schnittstellen
 
@@ -99,7 +129,7 @@ kein Auth nötig da das Repo öffentlich ist. Siehe `fetchGithubRawText()` in
 |---|---|---|
 | `/` | GET | Liefert `web/dist` (React-App), falls gebaut — sonst Fallback `chat.html` |
 | `/chat.html` | GET | Legacy-Chat-Oberfläche, immer erreichbar (statisch, `express.static(PROJECT_ROOT)`) |
-| `/api/chat` | POST | Nimmt `{ message, sessionId, userId }` entgegen, gibt `{ output, html, answerHtml, promptId, promptUsed, suggestedNextPrompts, escalation, ... }` zurück. Schreibt zusätzlich best-effort einen Case-Datensatz nach Supabase (falls konfiguriert). |
+| `/api/chat` | POST | Nimmt `{ message, sessionId, userId, promptId? }` entgegen. Antwort ist ein `text/event-stream` (SSE, HTTP immer 200) — Events: `{type:"delta",text}` (laufender Text), `{type:"reset"}`, `{type:"tool",query}` (Perplexity-Recherche läuft), zuletzt `{type:"done", output, html, answerHtml, promptId, promptUsed, suggestedNextPrompts, escalation, ...}` oder `{type:"error", message}`. Schreibt nach `done` zusätzlich best-effort einen Case-Datensatz nach Supabase (falls konfiguriert). |
 | `/api/prompts` | GET | Gibt den vollständigen Prompt-Katalog zurück (`getMetadata()`, GitHub-gecacht) — Grundlage der Prompts/Bibliothek-Seite |
 | `/api/agents` | GET | Gibt die 14 kuratierten Agenten zurück, angereichert mit Prompt-Details und (falls Supabase konfiguriert) echten Fallzahlen je Agent |
 | — | — | `knowledge_items` (Wissen/"Meine Ablage") wird direkt vom Frontend über den Supabase-Client gelesen/geschrieben (RLS), nicht über eine eigene Server-Route |
@@ -180,11 +210,16 @@ hinter einem Load-Balancer) müsste dies durch Redis oder eine DB ersetzt werden
 | Rolle | Modell | max_tokens | Begründung |
 |---|---|---|---|
 | Router | `claude-haiku-4-5-20251001` | 500 | Schnell/günstig, reine Klassifikationsaufgabe |
-| Executor | `claude-sonnet-5` | 8000 (+ bis zu 2 automatische Fortsetzungen bei Abschneiden) | Balance aus Gründlichkeit und Antwortzeit |
+| Executor | `claude-sonnet-5` | 32000, gestreamt | Hoch genug, dass auch sehr lange Vollanalysen (z.B. BR-Konter) praktisch nie abschneiden |
 
-**Fortsetzungslogik:** Erreicht Claude das Token-Limit mitten im Text
-(`stop_reason: "max_tokens"`), fordert der Server automatisch eine nahtlose Fortsetzung
-an, statt die abgeschnittene Antwort auszuliefern (siehe `runExecutor()`).
+**Kein Assistant-Message-Prefill mehr:** Eine frühere Fortsetzungslogik (bei erreichtem
+Token-Limit den abgeschnittenen Text als vorbelegte Assistant-Nachricht erneut senden, damit
+Claude nahtlos weiterschreibt) funktioniert mit `claude-sonnet-5` nicht mehr — das Modell lehnt
+solche Requests mit HTTP 400 ("does not support assistant message prefill") ab. Deshalb wurde
+`max_tokens` stattdessen deutlich angehoben (getestet gegen die echte API bis 64000 möglich,
+32000 gewählt) und auf Streaming umgestellt (siehe Abschnitt 2). Schneidet eine Antwort trotzdem
+ab (`stop_reason: "max_tokens"`), wird sie mit einem Hinweis ausgeliefert statt einen Fehler zu
+werfen.
 
 ## 9. Datei-Struktur
 
