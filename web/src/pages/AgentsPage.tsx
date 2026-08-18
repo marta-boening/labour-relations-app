@@ -174,7 +174,11 @@ export function AgentsPage() {
                 <AgentDetailCard
                   agent={selected}
                   onClose={() => setSelected(null)}
-                  onStartChat={(prefill) => navigate("/chat", { state: { prefill } })}
+                  onStartChat={(prompt) =>
+                    navigate("/chat", {
+                      state: { prefill: prompt.hint, promptId: prompt.id, promptName: prompt.name },
+                    })
+                  }
                 />
               )}
             </div>
@@ -237,7 +241,7 @@ function AgentDetailCard({
 }: {
   agent: AgentSummary;
   onClose: () => void;
-  onStartChat: (prefill: string) => void;
+  onStartChat: (prompt: { id: string; name: string; hint: string }) => void;
 }) {
   const [expanded, setExpanded] = React.useState(false);
   const c = categoryColor(agent.category);
@@ -279,7 +283,7 @@ function AgentDetailCard({
         <Button
           variant="primary"
           className="mt-4 w-full"
-          onClick={() => onStartChat(primaryPrompt.hint)}
+          onClick={() => onStartChat(primaryPrompt)}
         >
           <MessageSquare className="h-4 w-4" />
           Neuen Fall an {agent.name} übergeben
@@ -303,7 +307,7 @@ function AgentDetailCard({
                 <Badge variant="outline">{p.depth}</Badge>
               </div>
               <p className="mt-1 text-[11px] text-ink-muted">{p.hint}</p>
-              <Button size="sm" variant="outline" className="mt-2" onClick={() => onStartChat(p.hint)}>
+              <Button size="sm" variant="outline" className="mt-2" onClick={() => onStartChat(p)}>
                 Mit diesem Prompt chatten
               </Button>
             </div>

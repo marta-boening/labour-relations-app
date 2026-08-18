@@ -127,7 +127,9 @@ export function PromptsPage() {
                   variant="outline"
                   className="ml-auto"
                   onClick={() =>
-                    navigate("/chat", { state: { prefill: p.hint, promptId: p.id } })
+                    navigate("/chat", {
+                      state: { prefill: p.hint, promptId: p.id, promptName: p.name },
+                    })
                   }
                 >
                   Prompt starten

@@ -247,7 +247,11 @@ export function KnowledgePage() {
                             {a.prompts.map((p) => (
                               <li key={p.id}>
                                 <button
-                                  onClick={() => navigate("/chat", { state: { prefill: p.hint } })}
+                                  onClick={() =>
+                                    navigate("/chat", {
+                                      state: { prefill: p.hint, promptId: p.id, promptName: p.name },
+                                    })
+                                  }
                                   className="text-left text-xs text-ink-muted hover:text-petrol-800 hover:underline"
                                 >
                                   {p.name}

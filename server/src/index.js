@@ -62,7 +62,7 @@ if (WEB_BUILD_AVAILABLE) {
 }
 
 app.post("/api/chat", async (req, res) => {
-  const { message, sessionId, userId } = req.body || {};
+  const { message, sessionId, userId, promptId } = req.body || {};
   if (!message || typeof message !== "string" || !message.trim()) {
     return res.status(400).json({ error: "message fehlt" });
   }
@@ -77,6 +77,9 @@ app.post("/api/chat", async (req, res) => {
       userQuestion: message.trim(),
       sessionId,
       userId: effectiveUserId,
+      // Wenn gesetzt (Nutzer kam über "Prompt starten"/"Fall an X übergeben"): Router für die
+      // gesamte Session überspringen, siehe pinnedPrompts in pipeline.js.
+      promptId: typeof promptId === "string" && promptId.trim() ? promptId.trim() : undefined,
     });
     res.json(result);
 

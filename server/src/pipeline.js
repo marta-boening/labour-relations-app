@@ -199,6 +199,14 @@ function parseRouterOutput(rawOutput, metadata, userQuestion) {
     return { ...parsed, isClarification: true };
   }
 
+  return enrichRouting(parsed, metadata);
+}
+
+// Reichert ein rohes Routing-Ergebnis (prompt_id/target_agent/depth/confidence/...) um die
+// Felder an, die aus dem Prompt-Katalog abgeleitet werden — gemeinsam genutzt vom normalen
+// Router-Pfad (parseRouterOutput) und vom direkten Pfad (buildDirectRouting), der den Router
+// komplett überspringt.
+function enrichRouting(parsed, metadata, { forceLowConfidence } = {}) {
   const promptMeta = metadata.prompts.find((p) => p.id === parsed.prompt_id);
   const baseUrl = metadata._meta.base_url_raw;
   const promptUrl = baseUrl + (promptMeta.file || parsed.prompt_id + "_Prompt.md");
@@ -206,7 +214,7 @@ function parseRouterOutput(rawOutput, metadata, userQuestion) {
   return {
     ...parsed,
     isClarification: false,
-    lowConfidence: parsed.confidence === "low",
+    lowConfidence: forceLowConfidence ?? parsed.confidence === "low",
     promptFile: promptMeta.file || parsed.prompt_id + "_Prompt.md",
     promptUrl,
     promptName: promptMeta.name,
@@ -218,6 +226,30 @@ function parseRouterOutput(rawOutput, metadata, userQuestion) {
       })
       .filter(Boolean),
   };
+}
+
+// ── 3b. Direktes Routing (Router überspringen) ──────────────────────────────
+// Wird genutzt, wenn der Nutzer über Prompts/Bibliothek oder Agenten bewusst einen bestimmten
+// Prompt gewählt hat ("Prompt starten" / "Fall an X übergeben") — dann soll die gesamte
+// Chat-Session direkt an diesen Prompt gebunden bleiben, ohne Router-Aufruf und ohne
+// Klärungsschleife. lowConfidence wird trotzdem erzwungen (nicht wegen Unsicherheit über die
+// Wahl, sondern damit der Fachagent fehlende Detailinfos als Annahme behandelt statt
+// nachzufragen — dieselbe Instruktion wie beim normalen "route whenever possible"-Pfad).
+function buildDirectRouting(promptId, metadata, userQuestion) {
+  const promptMeta = metadata.prompts.find((p) => p.id === promptId);
+  if (!promptMeta) return null;
+  return enrichRouting(
+    {
+      prompt_id: promptId,
+      target_agent: MAIN_AGENTS.includes(promptId) ? "main" : "spezialist",
+      depth: promptMeta.depth,
+      confidence: "high",
+      user_question: userQuestion,
+      reasoning: "Direkt ausgewählter Prompt — Router und Klärungsschleife bewusst übersprungen.",
+    },
+    metadata,
+    { forceLowConfidence: true }
+  );
 }
 
 // ── 4. Format Clarification ─────────────────────────────────────────────────
@@ -551,9 +583,28 @@ function formatOutput(rawAnswer, routing) {
   };
 }
 
+// Merkt sich pro Session, ob sie über "Prompt starten"/"Fall an X übergeben" direkt an einen
+// Prompt gebunden wurde — dann überspringen auch alle folgenden Nachrichten in derselben
+// Session den Router, nicht nur die erste.
+const pinnedPrompts = new Map();
+
 // ── Orchestrierung (entspricht dem gesamten n8n-Workflow) ──────────────────
-export async function handleChatMessage({ userQuestion, sessionId, userId }) {
+export async function handleChatMessage({ userQuestion, sessionId, userId, promptId }) {
   const metadata = await getMetadata();
+
+  if (promptId) {
+    pinnedPrompts.set(sessionId, promptId);
+  }
+  const pinnedPromptId = pinnedPrompts.get(sessionId);
+
+  if (pinnedPromptId) {
+    const routing = buildDirectRouting(pinnedPromptId, metadata, userQuestion);
+    if (routing) {
+      return runExecution({ routing, metadata, userQuestion, sessionId, userId });
+    }
+    // Unbekannte/ungültige promptId (z.B. veralteter Katalogstand) → normal weiterrouten.
+    pinnedPrompts.delete(sessionId);
+  }
 
   // Falls die letzte Nachricht in dieser Session eine Rückfrage war, ursprüngliche
   // Frage + genaue Rückfrage wieder anhängen — sonst ist eine kurze Antwort wie
@@ -577,6 +628,12 @@ export async function handleChatMessage({ userQuestion, sessionId, userId }) {
     });
     return formatClarification(routing);
   }
+
+  return runExecution({ routing, metadata, userQuestion: effectiveQuestion, sessionId, userId });
+}
+
+async function runExecution({ routing, metadata, userQuestion, sessionId, userId }) {
+  const effectiveQuestion = userQuestion;
 
   const [mdContent, embedding] = await Promise.all([
     loadPromptMarkdown(routing.promptUrl),

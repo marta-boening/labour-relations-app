@@ -21,6 +21,7 @@ export async function sendChatMessage(params: {
   message: string;
   sessionId: string;
   userId: string;
+  promptId?: string;
 }): Promise<ChatResponse> {
   const res = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",

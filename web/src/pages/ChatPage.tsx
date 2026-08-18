@@ -24,13 +24,19 @@ function makeSessionId() {
   return "sess-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 9);
 }
 
+interface PinnedPrompt {
+  id: string;
+  name: string;
+}
+
 export function ChatPage() {
   const { userId } = useAuth();
   const location = useLocation();
-  const [sessionId] = React.useState(makeSessionId);
+  const [sessionId, setSessionId] = React.useState(makeSessionId);
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [input, setInput] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [pinnedPrompt, setPinnedPrompt] = React.useState<PinnedPrompt | null>(null);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -38,17 +44,31 @@ export function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  // Von der Prompts- oder Agenten-Seite mit vorbelegtem Kontext angesprungen
-  // (navigate("/chat", { state: { prefill } })).
+  // Von der Prompts- oder Agenten-Seite mit vorbelegtem Kontext + gewähltem Prompt
+  // angesprungen (navigate("/chat", { state: { prefill, promptId, promptName } })).
+  // Ist promptId gesetzt, bleibt die gesamte Session direkt an diesen Prompt gebunden —
+  // kein Router-Aufruf, keine Klärungsschleife (siehe pinnedPrompts in pipeline.js).
   React.useEffect(() => {
-    const prefill = (location.state as { prefill?: string } | null)?.prefill;
-    if (prefill) {
-      setInput(prefill);
-      window.history.replaceState({}, "");
+    const state = location.state as
+      | { prefill?: string; promptId?: string; promptName?: string }
+      | null;
+    if (state?.prefill) {
+      setInput(state.prefill);
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
+    if (state?.promptId) {
+      setPinnedPrompt({ id: state.promptId, name: state.promptName ?? state.promptId });
+    }
+    window.history.replaceState({}, "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function startNewOpenChat() {
+    setSessionId(makeSessionId());
+    setMessages([]);
+    setPinnedPrompt(null);
+    setInput("");
+  }
 
   async function send(text: string) {
     const trimmed = text.trim();
@@ -64,7 +84,15 @@ export function ChatPage() {
     setLoading(true);
 
     try {
-      const data: ChatResponse = await sendChatMessage({ message: trimmed, sessionId, userId });
+      const data: ChatResponse = await sendChatMessage({
+        message: trimmed,
+        sessionId,
+        userId,
+        promptId: pinnedPrompt?.id,
+      });
+      if (pinnedPrompt && data.promptUsed && data.promptUsed !== pinnedPrompt.name) {
+        setPinnedPrompt({ id: pinnedPrompt.id, name: data.promptUsed });
+      }
       setMessages((prev) => [
         ...prev,
         {
@@ -120,6 +148,21 @@ export function ChatPage() {
         </span>
         <span className="font-mono text-[11px] text-ink-muted">{sessionId}</span>
       </div>
+
+      {pinnedPrompt && (
+        <div className="flex items-center gap-2 border-b border-border bg-petrol-800/5 px-6 py-2 text-xs">
+          <span className="text-ink-muted">
+            Direkt an <strong className="font-semibold text-ink">{pinnedPrompt.name}</strong> —
+            kein automatisches Routing, keine Rückfragen zur Themenwahl.
+          </span>
+          <button
+            onClick={startNewOpenChat}
+            className="ml-auto shrink-0 text-ink-subtle underline decoration-dotted hover:text-ink"
+          >
+            Neuen offenen Chat starten
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-6 py-7">
         {messages.length === 0 && (
