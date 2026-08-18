@@ -20,15 +20,16 @@ export interface ChatResponse {
 export type ChatStreamEvent =
   | { type: "delta"; text: string }
   | { type: "reset" }
-  | { type: "tool"; query: string };
+  | { type: "tool"; query: string }
+  | { type: "status"; message: string };
 
 // Liest die Antwort als Server-Sent-Events statt eines einzelnen JSON-Blocks — die Executor-
 // Antwort trifft live Wort für Wort ein statt am Stück nach 60-180s. Vermeidet außerdem, dass
 // Renders eigenes Gateway-Zeitlimit bei sehr langen Vollanalysen zuschlägt (502).
-// onEvent bekommt Zwischenereignisse (delta/reset/tool) für die progressive Anzeige; das
+// onEvent bekommt Zwischenereignisse (delta/reset/tool/status) für die progressive Anzeige; das
 // Promise löst erst mit der finalen, vollständig formatierten Antwort auf.
 export async function sendChatMessage(
-  params: { message: string; sessionId: string; userId: string; promptId?: string },
+  params: { message: string; sessionId: string; userId: string; promptId?: string; agentId?: string },
   onEvent?: (event: ChatStreamEvent) => void
 ): Promise<ChatResponse> {
   const res = await fetch(`${API_BASE}/api/chat`, {

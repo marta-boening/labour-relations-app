@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Users, Sparkles, Scale, Clock, X, MessageSquare } from "lucide-react";
+import { Users, Sparkles, Scale, Clock, X, ChevronDown, MessageSquare } from "lucide-react";
 import { fetchAgents, type AgentSummary } from "@/lib/api";
 import { fetchCases } from "@/lib/cases";
 import { useAuth } from "@/lib/useAuth";
@@ -174,7 +174,12 @@ export function AgentsPage() {
                 <AgentDetailCard
                   agent={selected}
                   onClose={() => setSelected(null)}
-                  onStartChat={(prompt) =>
+                  onStartAgent={() =>
+                    navigate("/chat", {
+                      state: { agentId: selected.id, agentName: selected.name },
+                    })
+                  }
+                  onStartPrompt={(prompt) =>
                     navigate("/chat", {
                       state: { prefill: prompt.hint, promptId: prompt.id, promptName: prompt.name },
                     })
@@ -237,19 +242,21 @@ function Stat({
 function AgentDetailCard({
   agent,
   onClose,
-  onStartChat,
+  onStartAgent,
+  onStartPrompt,
 }: {
   agent: AgentSummary;
   onClose: () => void;
-  onStartChat: (prompt: { id: string; name: string; hint: string }) => void;
+  onStartAgent: () => void;
+  onStartPrompt: (prompt: { id: string; name: string; hint: string }) => void;
 }) {
-  // Bei genau einem Prompt ist die Wahl eindeutig — Direkt-Button. Bei mehreren würde ein
-  // "primärer" Prompt geraten werden müssen (z.B. per Zufall/Reihenfolge in agentCatalog.js),
-  // was nicht zuverlässig zum tatsächlichen Anliegen passt (siehe agentCatalog.js: die
-  // Reihenfolge ist keine Relevanz-Sortierung). Deshalb bei mehreren Prompts direkt die
-  // Auswahl zeigen, statt falsch zu raten.
+  // Bündelt der Agent mehrere Prompts, wählt das Backend selbst den passenden aus
+  // (chooseAgentPrompt() in pipeline.js, ein auf die eigenen Kandidaten begrenzter, schneller
+  // Haiku-Aufruf) — kein blindes Raten des ersten Eintrags mehr. Die manuelle Liste bleibt als
+  // Override für Fälle, in denen man den Prompt bewusst selbst bestimmen will.
+  const [expanded, setExpanded] = React.useState(false);
   const c = categoryColor(agent.category);
-  const singlePrompt = agent.prompts.length === 1 ? agent.prompts[0] : null;
+  const hasMultiplePrompts = agent.prompts.length > 1;
 
   return (
     <div className="mx-auto mt-4 max-w-lg rounded-2xl border border-border bg-surface p-5 shadow-sm">
@@ -283,34 +290,46 @@ function AgentDetailCard({
         <span>{agent.caseCount} bearbeitete Fälle</span>
       </div>
 
-      {singlePrompt ? (
-        <Button
-          variant="primary"
-          className="mt-4 w-full"
-          onClick={() => onStartChat(singlePrompt)}
-        >
-          <MessageSquare className="h-4 w-4" />
-          Neuen Fall an {agent.name} übergeben
-        </Button>
-      ) : (
+      <Button variant="primary" className="mt-4 w-full" onClick={onStartAgent}>
+        <MessageSquare className="h-4 w-4" />
+        Neuen Fall an {agent.name} übergeben
+      </Button>
+      {hasMultiplePrompts && (
+        <p className="mt-1.5 text-center text-[11px] text-ink-subtle">
+          Wählt automatisch den passenden von {agent.promptCount} Prompts
+        </p>
+      )}
+
+      {hasMultiplePrompts && (
         <>
-          <p className="mt-4 text-xs font-medium text-ink-muted">
-            Dieser Agent bündelt {agent.promptCount} Prompts — welcher passt am besten?
-          </p>
-          <div className="mt-2 flex flex-col gap-2">
-            {agent.prompts.map((p) => (
-              <div key={p.id} className="rounded-lg border border-border bg-surface-alt p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-ink">{p.name}</span>
-                  <Badge variant="outline">{p.depth}</Badge>
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="mt-3 flex w-full items-center justify-between text-xs font-medium text-ink-muted hover:text-ink"
+          >
+            Oder Prompt selbst wählen
+            <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
+          </button>
+          {expanded && (
+            <div className="mt-2 flex flex-col gap-2">
+              {agent.prompts.map((p) => (
+                <div key={p.id} className="rounded-lg border border-border bg-surface-alt p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-ink">{p.name}</span>
+                    <Badge variant="outline">{p.depth}</Badge>
+                  </div>
+                  <p className="mt-1 text-[11px] text-ink-muted">{p.hint}</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2"
+                    onClick={() => onStartPrompt(p)}
+                  >
+                    Mit diesem Prompt chatten
+                  </Button>
                 </div>
-                <p className="mt-1 text-[11px] text-ink-muted">{p.hint}</p>
-                <Button size="sm" variant="outline" className="mt-2" onClick={() => onStartChat(p)}>
-                  Mit diesem Prompt chatten
-                </Button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>

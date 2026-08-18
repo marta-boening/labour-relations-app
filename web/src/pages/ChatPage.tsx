@@ -20,6 +20,7 @@ interface ChatMessage {
   isError?: boolean;
   streaming?: boolean;
   toolStatus?: string;
+  statusMessage?: string;
   timestamp: string;
   suggestedNextPrompts?: { id: string; label: string }[];
   escalation?: { suggested: boolean; target: string | null; reason: string | null };
@@ -34,8 +35,11 @@ function makeSessionId() {
 }
 
 interface PinnedPrompt {
-  id: string;
+  // null = noch nicht aufgelöst — Session ist an einen Agenten (nicht an einen konkreten
+  // Prompt) gebunden, chooseAgentPrompt() im Backend entscheidet bei der ersten Nachricht.
+  id: string | null;
   name: string;
+  agentId?: string;
 }
 
 export function ChatPage() {
@@ -123,16 +127,20 @@ export function ChatPage() {
   }, [messages, loading]);
 
   // Von der Prompts-/Agenten-Seite mit vorbelegtem Kontext + gewähltem Prompt angesprungen
-  // (navigate("/chat", { state: { prefill, promptId, promptName } })), oder von Verlauf/Fälle
-  // mit einem alten Fall zum Fortsetzen (state: { promptId, promptName, resumeCase }).
-  // Ist promptId gesetzt, bleibt die gesamte Session direkt an diesen Prompt gebunden — kein
-  // Router-Aufruf, keine Klärungsschleife (siehe pinnedPrompts in pipeline.js).
+  // (navigate("/chat", { state: { prefill, promptId, promptName } })), oder mit einem
+  // gewählten Agenten ohne konkreten Prompt (state: { agentId, agentName }) — dann bestimmt
+  // das Backend bei der ersten Nachricht selbst den passenden Prompt (chooseAgentPrompt()),
+  // oder von Verlauf/Fälle mit einem alten Fall zum Fortsetzen (state: { promptId, promptName,
+  // resumeCase }). Ist promptId/agentId gesetzt, bleibt die gesamte Session daran gebunden —
+  // kein Router-Aufruf, keine Klärungsschleife (siehe pinnedPrompts in pipeline.js).
   React.useEffect(() => {
     const state = location.state as
       | {
           prefill?: string;
           promptId?: string;
           promptName?: string;
+          agentId?: string;
+          agentName?: string;
           resumeCase?: { question: string; answerHtml: string };
         }
       | null;
@@ -142,6 +150,8 @@ export function ChatPage() {
     }
     if (state?.promptId) {
       setPinnedPrompt({ id: state.promptId, name: state.promptName ?? state.promptId });
+    } else if (state?.agentId) {
+      setPinnedPrompt({ id: null, name: state.agentName ?? state.agentId, agentId: state.agentId });
     }
     if (state?.resumeCase) {
       // Nur clientseitig sichtbar gemacht — die Antwort kommt aus der gespeicherten
@@ -198,29 +208,44 @@ export function ChatPage() {
 
     try {
       const data: ChatResponse = await sendChatMessage(
-        { message: trimmed, sessionId, userId, promptId: pinnedPrompt?.id },
+        {
+          message: trimmed,
+          sessionId,
+          userId,
+          promptId: pinnedPrompt?.id ?? undefined,
+          // Nur solange noch kein konkreter Prompt aufgelöst ist (id === null) — danach ist
+          // die Session bereits gepinnt, agentId wird vom Backend dann ignoriert.
+          agentId: pinnedPrompt && !pinnedPrompt.id ? pinnedPrompt.agentId : undefined,
+        },
         (event) => {
           if (event.type === "delta") {
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === botId ? { ...m, text: m.text + event.text, toolStatus: undefined } : m
+                m.id === botId
+                  ? { ...m, text: m.text + event.text, toolStatus: undefined, statusMessage: undefined }
+                  : m
               )
             );
           } else if (event.type === "reset") {
-            updateMessage(botId, { text: "", toolStatus: undefined });
+            updateMessage(botId, { text: "", toolStatus: undefined, statusMessage: undefined });
           } else if (event.type === "tool") {
-            updateMessage(botId, { toolStatus: event.query });
+            updateMessage(botId, { toolStatus: event.query, statusMessage: undefined });
+          } else if (event.type === "status") {
+            updateMessage(botId, { statusMessage: event.message });
           }
         }
       );
-      if (pinnedPrompt && data.promptUsed && data.promptUsed !== pinnedPrompt.name) {
-        setPinnedPrompt({ id: pinnedPrompt.id, name: data.promptUsed });
+      // Bei Agenten-Pin wird der Prompt erst mit der ersten Antwort bekannt; bei normalem
+      // Prompt-Pin kann sich der angezeigte Name noch leicht unterscheiden (z.B. Versionsnummer).
+      if (pinnedPrompt && data.promptId && (pinnedPrompt.id !== data.promptId || data.promptUsed !== pinnedPrompt.name)) {
+        setPinnedPrompt({ id: data.promptId, name: data.promptUsed ?? data.promptId });
       }
       updateMessage(botId, {
         text: data.output ?? "(leere Antwort)",
         html: data.answerHtml ?? data.html,
         streaming: false,
         toolStatus: undefined,
+        statusMessage: undefined,
         suggestedNextPrompts: data.suggestedNextPrompts,
         escalation: data.escalation,
       });
@@ -229,7 +254,13 @@ export function ChatPage() {
       const friendly = message.includes("Failed to fetch")
         ? "Verbindung zum Server fehlgeschlagen. Läuft der Server (npm start in server/)?"
         : `Fehler: ${message}`;
-      updateMessage(botId, { text: friendly, isError: true, streaming: false, toolStatus: undefined });
+      updateMessage(botId, {
+        text: friendly,
+        isError: true,
+        streaming: false,
+        toolStatus: undefined,
+        statusMessage: undefined,
+      });
     } finally {
       setLoading(false);
       textareaRef.current?.focus();
@@ -269,7 +300,9 @@ export function ChatPage() {
         <div className="flex items-center gap-2 border-b border-border bg-petrol-800/5 px-6 py-2 text-xs">
           <span className="text-ink-muted">
             Direkt an <strong className="font-semibold text-ink">{pinnedPrompt.name}</strong> —
-            kein automatisches Routing, keine Rückfragen zur Themenwahl.
+            {pinnedPrompt.id
+              ? " kein automatisches Routing, keine Rückfragen zur Themenwahl."
+              : " wählt automatisch den passenden Fachprompt, keine Rückfragen."}
           </span>
           <button
             onClick={startNewOpenChat}
@@ -382,7 +415,12 @@ function MessageRow({
           )}
         >
           {message.streaming ? (
-            message.toolStatus ? (
+            message.statusMessage ? (
+              <span className="flex items-center gap-1.5 text-ink-muted">
+                <Search className="h-3.5 w-3.5 shrink-0 animate-pulse" />
+                {message.statusMessage}
+              </span>
+            ) : message.toolStatus ? (
               <span className="flex items-center gap-1.5 text-ink-muted">
                 <Search className="h-3.5 w-3.5 shrink-0 animate-pulse" />
                 Recherchiert: „{message.toolStatus}"…

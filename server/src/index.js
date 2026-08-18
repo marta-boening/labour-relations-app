@@ -66,7 +66,7 @@ if (WEB_BUILD_AVAILABLE) {
 // eigenes Gateway-Zeitlimit (502 bei sehr langen Vollanalysen, unabhängig vom Token-Limit)
 // und die lange Wartezeit ohne jede Rückmeldung im Frontend.
 app.post("/api/chat", async (req, res) => {
-  const { message, sessionId, userId, promptId } = req.body || {};
+  const { message, sessionId, userId, promptId, agentId } = req.body || {};
   if (!message || typeof message !== "string" || !message.trim()) {
     return res.status(400).json({ error: "message fehlt" });
   }
@@ -92,6 +92,9 @@ app.post("/api/chat", async (req, res) => {
       // Wenn gesetzt (Nutzer kam über "Prompt starten"/"Fall an X übergeben"): Router für die
       // gesamte Session überspringen, siehe pinnedPrompts in pipeline.js.
       promptId: typeof promptId === "string" && promptId.trim() ? promptId.trim() : undefined,
+      // Nutzer kam über "Neuen Fall an [Agent] übergeben" ohne konkreten Prompt — Backend
+      // wählt selbst den passenden Prompt innerhalb des Agenten (chooseAgentPrompt()).
+      agentId: typeof agentId === "string" && agentId.trim() ? agentId.trim() : undefined,
       onEvent: send,
     });
     send({ type: "done", ...result });

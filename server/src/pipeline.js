@@ -4,6 +4,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { marked } from "marked";
 import { ROUTER_SYSTEM_PROMPT, PERPLEXITY_TOOL_DESCRIPTION } from "./routerPrompt.js";
+import { AGENT_CATALOG } from "./agentCatalog.js";
 
 const ROUTER_MODEL = "claude-haiku-4-5-20251001";
 const EXECUTOR_MODEL = "claude-sonnet-5";
@@ -249,6 +250,53 @@ function buildDirectRouting(promptId, metadata, userQuestion) {
     metadata,
     { forceLowConfidence: true }
   );
+}
+
+// ── 3c. Agenten-interner Mini-Router ────────────────────────────────────────
+// Wird genutzt, wenn der Nutzer über die Agenten-Seite bewusst einen Agenten (nicht einen
+// einzelnen Prompt) wählt — "Neuen Fall an X übergeben". Bei Agenten mit mehreren gebündelten
+// Prompts (z.B. LR-Stratege: 4 Prompts) wählt ein schneller, auf die eigenen Kandidaten
+// beschränkter Haiku-Aufruf den passenden aus, statt blind den ersten zu nehmen oder den
+// Nutzer klicken zu lassen — kein Klärungsschritt, "route whenever reasonably possible" auch
+// hier: die Kandidatenmenge ist klein und inhaltlich zusammengehörig, eine Rückfrage lohnt sich
+// nicht. Bei genau einem Prompt entfällt der API-Aufruf komplett.
+async function chooseAgentPrompt(agentId, userQuestion, metadata) {
+  const agent = AGENT_CATALOG.find((a) => a.id === agentId);
+  if (!agent) return null;
+  if (agent.promptIds.length === 1) return agent.promptIds[0];
+
+  const candidates = agent.promptIds
+    .map((id) => metadata.prompts.find((p) => p.id === id))
+    .filter(Boolean);
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0].id;
+
+  const catalogText = candidates.map((p) => `- ${p.id} (${p.depth}): ${p.hint}`).join("\n");
+
+  try {
+    const response = await anthropic.messages.create({
+      model: ROUTER_MODEL,
+      max_tokens: 60,
+      temperature: 0,
+      system:
+        "Du wählst innerhalb EINES bereits vom Nutzer gewählten Fach-Agenten den am besten " +
+        "passenden Prompt für die Nutzerfrage. Antworte NUR mit der exakten prompt_id, " +
+        "nichts sonst. Wähle IMMER einen Kandidaten — auch bei Unsicherheit den " +
+        "plausibelsten, niemals unentschieden lassen oder nachfragen.",
+      messages: [
+        {
+          role: "user",
+          content: `Nutzerfrage: ${userQuestion}\n\nKandidaten:\n${catalogText}\n\nAntworte nur mit der prompt_id.`,
+        },
+      ],
+    });
+    const text = response.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
+    const match = candidates.find((p) => text.includes(p.id));
+    return (match || candidates.find((p) => p.depth === "full") || candidates[0]).id;
+  } catch (e) {
+    // Fällt auf den ersten Full-Prompt zurück statt die Anfrage scheitern zu lassen.
+    return (candidates.find((p) => p.depth === "full") || candidates[0]).id;
+  }
 }
 
 // ── 4. Format Clarification ─────────────────────────────────────────────────
@@ -605,12 +653,20 @@ const pinnedPrompts = new Map();
 // onEvent(payload): optionaler Callback für Streaming — wird während der Executor-Generierung
 // mit { type: "delta", text } / { type: "reset" } / { type: "tool" } aufgerufen (siehe
 // runExecutor). Bleibt der Callback weg, läuft alles wie zuvor, nur ohne Zwischenereignisse.
-export async function handleChatMessage({ userQuestion, sessionId, userId, promptId, onEvent }) {
+export async function handleChatMessage({ userQuestion, sessionId, userId, promptId, agentId, onEvent }) {
   const emit = onEvent || (() => {});
   const metadata = await getMetadata();
 
   if (promptId) {
     pinnedPrompts.set(sessionId, promptId);
+  } else if (agentId && !pinnedPrompts.has(sessionId)) {
+    // Erste Nachricht nach Agenten-Wahl ohne konkreten Prompt ("Neuen Fall an X übergeben") —
+    // passenden Prompt innerhalb des Agenten-Clusters bestimmen und die Session daran binden.
+    // Ab der zweiten Nachricht greift bereits die normale Pinning-Logik oben, agentId wird
+    // dann ignoriert.
+    emit({ type: "status", message: "Wähle passenden Fachprompt…" });
+    const resolvedPromptId = await chooseAgentPrompt(agentId, userQuestion, metadata);
+    if (resolvedPromptId) pinnedPrompts.set(sessionId, resolvedPromptId);
   }
   const pinnedPromptId = pinnedPrompts.get(sessionId);
 
