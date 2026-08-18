@@ -27,7 +27,11 @@ export async function storeCase({ userId, sessionId, userQuestion, result }) {
   if (!supabaseAdmin || !userId || !result || result.isClarification) return;
   try {
     const agent = findAgentByPromptId(result.promptId);
-    await supabaseAdmin.from("cases").insert({
+    // Supabase-JS wirft bei einem fehlgeschlagenen Insert KEINE Exception, sondern liefert
+    // { error } zurück — ohne diese Prüfung blieb ein Schreibfehler (z.B. user_id ist keine
+    // gültige UUID/kein bekannter auth.users-Eintrag) bisher komplett unbemerkt: kein Log,
+    // keine Fehlermeldung, der Fall fehlte einfach kommentarlos in Verlauf/Fälle.
+    const { error } = await supabaseAdmin.from("cases").insert({
       user_id: userId,
       session_id: sessionId,
       prompt_id: result.promptId,
@@ -40,6 +44,9 @@ export async function storeCase({ userId, sessionId, userQuestion, result }) {
       escalation_suggested: !!(result.escalation && result.escalation.suggested),
       escalation_target: (result.escalation && result.escalation.target) || null,
     });
+    if (error) {
+      console.error("Fehler beim Schreiben des Case-Datensatzes nach Supabase:", error.message);
+    }
   } catch (err) {
     console.error("Fehler beim Schreiben des Case-Datensatzes nach Supabase:", err);
   }

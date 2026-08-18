@@ -2,7 +2,7 @@ import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { History, ChevronRight, MessageSquarePlus } from "lucide-react";
-import { fetchCases, type CaseRow } from "@/lib/cases";
+import { fetchCases, groupCasesBySession, type CaseThread } from "@/lib/cases";
 import { useAuth } from "@/lib/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,9 @@ export function CasesPage() {
     queryKey: ["cases"],
     queryFn: () => fetchCases(),
   });
-  const [selected, setSelected] = React.useState<CaseRow | null>(null);
+  const threads = React.useMemo(() => groupCasesBySession(cases ?? []), [cases]);
+  const [selectedSessionId, setSelectedSessionId] = React.useState<string | null>(null);
+  const selected = threads.find((t) => t.sessionId === selectedSessionId) ?? null;
 
   return (
     <div className="flex h-full flex-col">
@@ -46,35 +48,42 @@ export function CasesPage() {
           {configured && isLoading && (
             <div className="p-6 text-sm text-ink-subtle">Lädt Fälle…</div>
           )}
-          {configured && !isLoading && cases?.length === 0 && (
+          {configured && !isLoading && threads.length === 0 && (
             <div className="p-6 text-sm text-ink-subtle">
               Noch keine Fälle. Starten Sie einen neuen Fall im Chat.
             </div>
           )}
-          {cases?.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setSelected(c)}
-              className={`flex w-full items-start gap-2 border-b border-border px-5 py-4 text-left transition hover:bg-surface-alt ${
-                selected?.id === c.id ? "bg-surface-alt" : ""
-              }`}
-            >
-              <History className="mt-0.5 h-4 w-4 shrink-0 text-ink-subtle" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium text-ink">
-                    {c.title || c.prompt_id}
+          {threads.map((t) => {
+            const first = t.cases[0];
+            const hasEscalation = t.cases.some((c) => c.escalation_suggested);
+            return (
+              <button
+                key={t.sessionId}
+                onClick={() => setSelectedSessionId(t.sessionId)}
+                className={`flex w-full items-start gap-2 border-b border-border px-5 py-4 text-left transition hover:bg-surface-alt ${
+                  selectedSessionId === t.sessionId ? "bg-surface-alt" : ""
+                }`}
+              >
+                <History className="mt-0.5 h-4 w-4 shrink-0 text-ink-subtle" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-ink">
+                      {t.title}
+                    </span>
+                    {t.cases.length > 1 && (
+                      <Badge variant="outline">{t.cases.length} Nachrichten</Badge>
+                    )}
+                    {hasEscalation && <Badge variant="medium">Vertiefung</Badge>}
+                  </div>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-ink-muted">{first.question}</p>
+                  <span className="mt-1 block text-[11px] text-ink-subtle">
+                    {formatDate(t.createdAt)}
                   </span>
-                  {c.escalation_suggested && <Badge variant="medium">Vertiefung</Badge>}
                 </div>
-                <p className="mt-0.5 line-clamp-2 text-xs text-ink-muted">{c.question}</p>
-                <span className="mt-1 block text-[11px] text-ink-subtle">
-                  {formatDate(c.created_at)}
-                </span>
-              </div>
-              <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-ink-subtle" />
-            </button>
-          ))}
+                <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-ink-subtle" />
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex-1 overflow-y-auto p-8">
@@ -83,46 +92,62 @@ export function CasesPage() {
               Fall auswählen, um Details zu sehen.
             </div>
           ) : (
-            <div className="mx-auto max-w-2xl">
-              <div className="mb-1 flex items-center justify-between gap-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
-                  {selected.prompt_name || selected.prompt_id}
-                </div>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() =>
-                    navigate("/chat", {
-                      state: {
-                        promptId: selected.prompt_id,
-                        promptName: selected.prompt_name ?? selected.prompt_id,
-                        resumeCase: {
-                          question: selected.question,
-                          answerHtml: selected.answer_html || selected.answer,
-                        },
-                      },
-                    })
-                  }
-                >
-                  <MessageSquarePlus className="h-3.5 w-3.5" />
-                  Fall fortsetzen
-                </Button>
-              </div>
-              <h1 className="mb-4 text-lg font-semibold text-ink">
-                {selected.title || "Fall"}
-              </h1>
-              <div className="mb-6 rounded-2xl border border-border bg-surface p-4 text-sm text-ink-muted">
-                {selected.question}
-              </div>
-              <div
-                className="prose-answer text-sm text-ink"
-                dangerouslySetInnerHTML={{
-                  __html: selected.answer_html || selected.answer,
-                }}
-              />
-            </div>
+            <CaseThreadDetail thread={selected} onResume={() => resumeThread(selected, navigate)} />
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function resumeThread(
+  thread: CaseThread,
+  navigate: ReturnType<typeof useNavigate>
+) {
+  navigate("/chat", {
+    state: {
+      promptId: thread.promptId,
+      promptName: thread.promptName ?? thread.promptId,
+      resumeSessionId: thread.sessionId,
+      resumeThread: thread.cases.map((c) => ({
+        question: c.question,
+        answerHtml: c.answer_html || c.answer,
+      })),
+    },
+  });
+}
+
+function CaseThreadDetail({ thread, onResume }: { thread: CaseThread; onResume: () => void }) {
+  return (
+    <div className="mx-auto max-w-2xl">
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <div className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
+          {thread.promptName || thread.promptId}
+        </div>
+        <Button size="sm" variant="primary" onClick={onResume}>
+          <MessageSquarePlus className="h-3.5 w-3.5" />
+          Fall fortsetzen
+        </Button>
+      </div>
+      <h1 className="mb-4 text-lg font-semibold text-ink">{thread.title}</h1>
+
+      <div className="flex flex-col gap-6">
+        {thread.cases.map((c, i) => (
+          <div key={c.id} className="flex flex-col gap-2">
+            {thread.cases.length > 1 && (
+              <span className="text-[11px] font-medium uppercase tracking-wide text-ink-subtle">
+                Nachricht {i + 1} · {formatDate(c.created_at)}
+              </span>
+            )}
+            <div className="rounded-2xl border border-border bg-surface p-4 text-sm text-ink-muted">
+              {c.question}
+            </div>
+            <div
+              className="prose-answer text-sm text-ink"
+              dangerouslySetInnerHTML={{ __html: c.answer_html || c.answer }}
+            />
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -45,7 +45,12 @@ interface PinnedPrompt {
 export function ChatPage() {
   const { userId } = useAuth();
   const location = useLocation();
-  const [sessionId, setSessionId] = React.useState(makeSessionId);
+  // Beim Fortsetzen eines Falls (Verlauf/Fälle) wird dieselbe session_id weiterverwendet statt
+  // eine neue zu erzeugen — sonst landet die Fortsetzung als eigener, separater Fall in der
+  // Liste statt am selben Fall dranzuhängen (siehe groupCasesBySession() in lib/cases.ts).
+  const [sessionId, setSessionId] = React.useState(
+    () => (location.state as { resumeSessionId?: string } | null)?.resumeSessionId || makeSessionId()
+  );
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [input, setInput] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -131,8 +136,9 @@ export function ChatPage() {
   // gewählten Agenten ohne konkreten Prompt (state: { agentId, agentName }) — dann bestimmt
   // das Backend bei der ersten Nachricht selbst den passenden Prompt (chooseAgentPrompt()),
   // oder von Verlauf/Fälle mit einem alten Fall zum Fortsetzen (state: { promptId, promptName,
-  // resumeCase }). Ist promptId/agentId gesetzt, bleibt die gesamte Session daran gebunden —
-  // kein Router-Aufruf, keine Klärungsschleife (siehe pinnedPrompts in pipeline.js).
+  // resumeSessionId, resumeThread }). Ist promptId/agentId gesetzt, bleibt die gesamte Session
+  // daran gebunden — kein Router-Aufruf, keine Klärungsschleife (siehe pinnedPrompts in
+  // pipeline.js). resumeSessionId wird schon oben beim sessionId-State gelesen.
   React.useEffect(() => {
     const state = location.state as
       | {
@@ -141,7 +147,7 @@ export function ChatPage() {
           promptName?: string;
           agentId?: string;
           agentName?: string;
-          resumeCase?: { question: string; answerHtml: string };
+          resumeThread?: { question: string; answerHtml: string }[];
         }
       | null;
     if (state?.prefill) {
@@ -153,27 +159,27 @@ export function ChatPage() {
     } else if (state?.agentId) {
       setPinnedPrompt({ id: null, name: state.agentName ?? state.agentId, agentId: state.agentId });
     }
-    if (state?.resumeCase) {
-      // Nur clientseitig sichtbar gemacht — die Antwort kommt aus der gespeicherten
-      // Fallhistorie, nicht neu vom Server. Der Sachverhalt wird der KI dennoch verfügbar,
-      // sobald eine neue Frage gestellt wird: dieselbe Session ist an den Prompt gepinnt und
-      // Qdrant liefert den alten Fall automatisch als RAG-Kontext zurück (gleicher Nutzer,
-      // inhaltlich ähnlich).
-      setMessages([
+    if (state?.resumeThread && state.resumeThread.length > 0) {
+      // Nur clientseitig sichtbar gemacht — die Antworten kommen aus der gespeicherten
+      // Fallhistorie, nicht neu vom Server. Neue Nachrichten laufen unter derselben session_id
+      // weiter (siehe sessionId-State oben), landen also beim Speichern am selben Fall statt
+      // als neuer, separater Fall in Verlauf/Fälle.
+      const seeded: ChatMessage[] = state.resumeThread.flatMap((exchange) => [
         {
           id: crypto.randomUUID(),
-          role: "user",
-          text: state.resumeCase.question,
+          role: "user" as const,
+          text: exchange.question,
           timestamp: "früher",
         },
         {
           id: crypto.randomUUID(),
-          role: "bot",
-          text: state.resumeCase.answerHtml,
-          html: state.resumeCase.answerHtml,
+          role: "bot" as const,
+          text: exchange.answerHtml,
+          html: exchange.answerHtml,
           timestamp: "früher",
         },
       ]);
+      setMessages(seeded);
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
     window.history.replaceState({}, "");
