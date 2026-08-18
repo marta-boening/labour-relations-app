@@ -51,13 +51,17 @@ export async function sendChatMessage(
   let buffer = "";
   let finalResult: ChatResponse | null = null;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  // Verarbeitet vollständige "data: {...}"-Blöcke aus dem Puffer; der letzte, evtl. noch
+  // unvollständige Rest bleibt für den nächsten Durchlauf im Puffer stehen.
+  const processBuffer = (isFinalChunk: boolean) => {
     const parts = buffer.split("\n\n");
-    buffer = parts.pop() ?? "";
-    for (const part of parts) {
+    buffer = isFinalChunk ? "" : parts.pop() ?? "";
+    // Bei Verbindungsabbruch (isFinalChunk) auch ein zuletzt evtl. ohne trennendes "\n\n"
+    // angekommenes Event noch mitnehmen, statt es stillschweigend zu verwerfen — sonst zeigt
+    // die App bei einem Fehler direkt am Verbindungsende nur die generische Fallback-Meldung
+    // statt der echten (z.B. "Guthaben zu niedrig").
+    const toProcess = isFinalChunk ? parts.concat(buffer ? [buffer] : []) : parts;
+    for (const part of toProcess) {
       const line = part.trim();
       if (!line.startsWith("data:")) continue;
       let payload: Record<string, unknown>;
@@ -74,6 +78,16 @@ export async function sendChatMessage(
         onEvent?.(payload as ChatStreamEvent);
       }
     }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      processBuffer(true);
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    processBuffer(false);
   }
 
   if (!finalResult) {
