@@ -498,7 +498,15 @@ async function runExecutor(systemPrompt, userQuestion, sessionId, emit = () => {
       // Eventuell schon gestreamter Text vor dem Tool-Aufruf gehört nicht zur finalen Antwort
       // (entspricht dem bisherigen "finalText = ''" beim nicht-streamenden Vorgänger).
       emit({ type: "reset" });
-      messages.push({ role: "assistant", content: response.content });
+      // thinking/redacted_thinking-Blöcke rausfiltern: beim Streamen (messages.stream() +
+      // finalMessage()) rekonstruiert der SDK-Snapshot sie in Kombination mit Tool-Use bei
+      // diesem Modell fehlerhaft ("each thinking block must contain thinking", HTTP 400) —
+      // beim erneuten Senden schlägt der nächste Request sonst fehl. Wir verlassen uns nicht
+      // auf explizite Denk-Block-Kontinuität zwischen Turns, daher unbedenklich zu entfernen.
+      const assistantContent = response.content.filter(
+        (b) => b.type !== "thinking" && b.type !== "redacted_thinking"
+      );
+      messages.push({ role: "assistant", content: assistantContent });
       const toolResults = [];
       for (const block of response.content) {
         if (block.type === "tool_use") {
