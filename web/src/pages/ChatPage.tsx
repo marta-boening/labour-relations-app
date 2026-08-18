@@ -246,7 +246,7 @@ export function ChatPage() {
   function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setInput(e.target.value);
     e.target.style.height = "auto";
-    e.target.style.height = Math.min(e.target.scrollHeight, 130) + "px";
+    e.target.style.height = Math.min(e.target.scrollHeight, 220) + "px";
   }
 
   return (
@@ -312,7 +312,7 @@ export function ChatPage() {
             rows={1}
             maxLength={2000}
             placeholder="Frage eingeben ..."
-            className="max-h-[130px] min-h-[44px] flex-1 resize-none rounded-full border border-border bg-sand px-[18px] py-[11px] text-sm text-ink outline-none placeholder:text-ink-subtle focus:border-border-hover focus:ring-2 focus:ring-petrol-600/15 disabled:opacity-60"
+            className="max-h-[220px] min-h-[44px] flex-1 resize-none rounded-2xl border border-border bg-sand px-[18px] py-[11px] text-sm text-ink outline-none placeholder:text-ink-subtle focus:border-border-hover focus:ring-2 focus:ring-petrol-600/15 disabled:opacity-60"
           />
           <button
             onClick={toggleRecording}
