@@ -15,6 +15,16 @@ selbst). Das Ergebnis ist immer eine lokale Datei, die der Nutzer entweder von H
 oder mit dem mitgelieferten Skript (`scripts/publish-to-confluence.mjs`) unter Verwendung
 seiner eigenen Zugangsdaten selbst hochlädt.
 
+**Bekannter Kontext (bestätigt, nicht erneut erfragen):** Die Confluence-Instanz ist
+**Server/Data Center**, läuft auf eigener Firmen-Domain (kein `*.atlassian.net`). Das
+bedeutet: "Markup einfügen" → "Confluence Storage Format" ist im Editor verfügbar — der
+Storage-Format-Weg (Schritt 3) ist damit der **Standardweg**, nicht nur eine von zwei
+Optionen. Für die REST-API-Authentifizierung im Publish-Skript heißt das
+`CONFLUENCE_AUTH_MODE=token` mit einem Personal Access Token (kein Atlassian-Account-
+E-Mail/API-Token-Paar wie bei Cloud). Die Cloud-Anleitung bleibt als Referenz erhalten,
+falls sich die Instanz irgendwann ändert oder eine zweite, Cloud-basierte Plattform
+hinzukommt — muss aber nicht mehr aktiv abgefragt werden.
+
 ## Ablauf
 
 ### Schritt 0 — Bibliothek prüfen (einmalig, nicht bei jedem Lauf nerven)
@@ -48,9 +58,7 @@ Frag kompakt (nicht als Formular mit 15 Punkten, sondern 2-3 gebündelte Fragen)
    Schnellzugriffe/Links, Fahrplan/Meilensteine, Entscheidungsprotokoll, Meeting-Notizen,
    FAQ, Onboarding/Erste Schritte, Eskalationspfad, Aufgabenliste, Kennzahlen, Ressourcen).
    Der Nutzer muss nicht alle wählen — nur was für dieses Projekt Sinn ergibt.
-3. **Confluence-Variante** (Cloud vs. Server/Data Center) — falls der Nutzer es nicht weiß,
-   in `SKILL.md`-Ausgabe beide Wege mitliefern (siehe Schritt 3).
-4. Konkrete Inhalte, wo nötig (Teammitglieder, erste Meilensteine, Ansprechpartner) — wenn
+3. Konkrete Inhalte, wo nötig (Teammitglieder, erste Meilensteine, Ansprechpartner) — wenn
    der Nutzer das noch nicht parat hat, Platzhalter im Format `TODO: ...` einsetzen statt zu
    blockieren.
 
@@ -71,16 +79,17 @@ Frag kompakt (nicht als Formular mit 15 Punkten, sondern 2-3 gebündelte Fragen)
 
 Erzeuge zusätzlich `output/<slug>-einfuegen.md` mit passender Anleitung:
 
-- **Server/Data Center:** Seite anlegen → "..." → "Markup einfügen" → "Confluence Storage
-  Format" → Inhalt der `.storage.xml` einfügen → Vorschau prüfen → Einfügen.
-- **Cloud:** Rohes Storage-Format lässt sich im Standard-Editor nicht direkt einfügen.
-  Nutze `references/cloud-paste-guide.md` für die Zuordnung "Baustein → Slash-Command",
-  damit der Nutzer jeden Block in Sekunden manuell nachbaut (Inhalte sind ja bereits fertig
-  formuliert in der `.storage.xml`, nur die Makro-Hülle wird per `/befehl` erzeugt).
-- **Schnellster Weg (beide Varianten, falls Nutzer eigenen API-Token hat):**
-  `scripts/publish-to-confluence.mjs` verwenden — legt die Seite per REST-API in einem
-  Rutsch an, ganz ohne manuelles Einfügen. Läuft mit den **Zugangsdaten des Nutzers**, nie
-  mit Zugriff dieser Session. Siehe Kommentar am Kopf des Skripts für Aufruf/Env-Variablen.
+- **Standardweg (Server/Data Center):** Seite anlegen → "..." → "Markup einfügen" →
+  "Confluence Storage Format" → Inhalt der `.storage.xml` einfügen → Vorschau prüfen →
+  Einfügen. Das funktioniert in einem Rutsch, da Server/Data Center rohes Storage-Format
+  akzeptiert.
+- **Schnellster Weg:** `scripts/publish-to-confluence.mjs` mit `CONFLUENCE_AUTH_MODE=token`
+  und einem Personal Access Token verwenden — legt die Seite per REST-API direkt an, ganz
+  ohne manuelles Einfügen im Editor. Läuft mit den **Zugangsdaten des Nutzers**, nie mit
+  Zugriff dieser Session. Siehe Kommentar am Kopf des Skripts für Aufruf/Env-Variablen.
+- **Nur falls relevant (Cloud):** `references/cloud-paste-guide.md` ist als Referenz
+  vorhanden, falls irgendwann eine zweite, Cloud-basierte Plattform dazukommt — für die
+  aktuelle Server/Data-Center-Instanz nicht nötig.
 
 ### Schritt 4 — Bibliothek weiterpflegen
 
