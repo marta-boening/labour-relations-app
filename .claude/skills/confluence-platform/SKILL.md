@@ -27,44 +27,62 @@ hinzukommt — muss aber nicht mehr aktiv abgefragt werden.
 
 ## Ablauf
 
-### Schritt 0 — Bibliothek prüfen (einmalig, nicht bei jedem Lauf nerven)
+### Schritt 0 — Bibliothek prüfen (erledigt, hier nur bei echten Neuerungen ergänzen)
 
-Prüfe, ob `references/hr-board-export.xml` existiert.
+Ein echter Storage-Format-Export des HR-Betriebsratsboards wurde bereits ausgewertet. Die
+Kernerkenntnis: Das HR Board ist **kein** reiner Satz aus Standard-Confluence-Makros, sondern
+ein zweiteiliges Muster — siehe `references/dynamic-dashboard-pattern.md`:
 
-- **Falls ja:** Das ist ein echter Storage-Format-Export der bestehenden HR-Board-Seite.
-  Durchsuche ihn nach `<ac:structured-macro ac:name="...">`-Blöcken, die noch **nicht** in
-  `references/macro-library.md` dokumentiert sind, und ergänze sie dort (mit Kommentar
-  „aus HR Board übernommen"). Das macht die Bibliothek über die Zeit präziser, weil sie
-  dann echte, in dieser Instanz erprobte Makro-Syntax statt generischer Beispiele enthält.
-- **Falls nein:** Erwähne einmal kurz (nicht wiederholt in jedem Lauf), dass ein Export der
-  HR-Board-Seite die Genauigkeit deutlich verbessern würde, und wie man ihn bekommt:
-  1. HR-Board-Seite öffnen, die `pageId` aus der URL notieren (Parameter `pageId=...`,
-     oder über "..." → Seiteninformation).
-  2. Im Browser (eingeloggt) aufrufen:
-     - Cloud: `https://<space>.atlassian.net/wiki/rest/api/content/<pageId>?expand=body.storage`
-     - Server/Data Center: `https://<host>/rest/api/content/<pageId>?expand=body.storage`
-  3. Den Wert von `body.storage.value` (das ist escaptes XHTML) in
-     `references/hr-board-export.xml` speichern (Escaping rückgängig machen, also
-     `&lt;` → `<` etc.).
-  Danach **ohne diesen Export fortfahren** — er ist eine Verbesserung, kein Blocker.
+1. Eine separate **Datenpflege-Seite** mit **ConfiForm**-Formularen (Pflege der Inhalte über
+   normale Formularfelder, kein HTML nötig).
+2. Die **Anzeige-Seite** selbst, aufgebaut aus dem **HTML-Makro** (eigenes CSS/HTML) plus
+   **`confiform-plain`**-Blöcken, die live gefilterte/sortierte Daten aus der Datenpflege-Seite
+   ziehen und in ein Template einsetzen.
+
+Das generalisierte CSS-Design-System aus dem echten Export liegt fertig zum Wiederverwenden in
+`references/dashboard-design-system.css` (mit `{{PREFIX}}`/`{{FONT_STACK}}`-Platzhaltern).
+Interne Identifikatoren (Domain, Seiten-IDs, Konto-Pfad) wurden beim Extrahieren entfernt —
+die Rohdaten des Exports selbst wurden **nicht** ins Repo übernommen (nur die daraus
+abgeleiteten, generischen Bausteine), um keine internen Firmen-Identifikatoren in der
+Git-Historie zu speichern.
+
+**Falls sich das HR Board später ändert oder ein zweites Referenz-Board exportiert wird:**
+Storage-Format wie oben beschrieben per `{{CONFLUENCE_BASE_URL}}/rest/api/content/<pageId>?expand=body.storage`
+holen (Server/Data Center — Base-URL ist die interne Firmen-Domain), im Gespräch einfügen
+lassen, neue Muster wieder generalisiert (ohne interne IDs/Domain/E-Mail) in
+`references/macro-library.md` bzw. `references/dynamic-dashboard-pattern.md` ergänzen.
 
 ### Schritt 1 — Kurzes Interview
 
 Frag kompakt (nicht als Formular mit 15 Punkten, sondern 2-3 gebündelte Fragen) nach:
 
 1. **Name & Zweck** der neuen Plattform, Zielgruppe (wer nutzt die Seite, wofür).
-2. **Welche Bausteine** gewünscht sind — biete die Standard-Bausteine aus
+2. **Statisch oder datengetrieben?** (siehe `references/dynamic-dashboard-pattern.md`,
+   Abschnitt „Wann dieses Muster wählen, wann nicht"):
+   - **Datengetrieben** (wie das HR Board), wenn mehrere Personen die Inhalte laufend pflegen,
+     Live-Kennzahlen/Zähler gewünscht sind, oder gefiltert/sortiert werden soll. Braucht eine
+     eigene Datenpflege-Seite mit ConfiForm-Formularen (je Dateneinheit eines) — im Gespräch
+     klären, welche Formulare/Felder nötig sind, und die Anlage dieser Formulare als
+     eigenständigen Schritt für den Nutzer benennen (das kann diese Session nicht automatisch
+     erledigen, da kein Confluence-Zugriff besteht).
+   - **Statisch**, wenn die Seite selten aktualisiert wird oder kein Formular-Aufwand lohnt —
+     dann reicht `references/blueprint-storage.xml` mit normalen Confluence-Makros.
+3. **Welche Bausteine** gewünscht sind — biete die Standard-Bausteine aus
    `references/macro-library.md` als Liste an (Status-Dashboard, Team & Kontakte,
    Schnellzugriffe/Links, Fahrplan/Meilensteine, Entscheidungsprotokoll, Meeting-Notizen,
    FAQ, Onboarding/Erste Schritte, Eskalationspfad, Aufgabenliste, Kennzahlen, Ressourcen).
    Der Nutzer muss nicht alle wählen — nur was für dieses Projekt Sinn ergibt.
-3. Konkrete Inhalte, wo nötig (Teammitglieder, erste Meilensteine, Ansprechpartner) — wenn
+4. Konkrete Inhalte, wo nötig (Teammitglieder, erste Meilensteine, Ansprechpartner) — wenn
    der Nutzer das noch nicht parat hat, Platzhalter im Format `TODO: ...` einsetzen statt zu
    blockieren.
 
 ### Schritt 2 — Seite zusammenbauen
 
-- Nimm `references/blueprint-storage.xml` als Grundgerüst.
+- Bei **datengetrieben**: `references/dashboard-design-system.css` (Prefix/Font ersetzen) plus
+  `confiform-plain`-Blöcke aus `references/macro-library.md`/`dynamic-dashboard-pattern.md`
+  kombinieren. Zusätzlich kurz auflisten, welche ConfiForm-Formulare (mit Feldern) der Nutzer
+  auf der Datenpflege-Seite selbst anlegen muss — das ersetzt Schritt 2 nicht, ergänzt es aber.
+- Bei **statisch**: `references/blueprint-storage.xml` als Grundgerüst nehmen.
 - Entferne Blöcke, die der Nutzer nicht wollte; ergänze zusätzliche aus
   `references/macro-library.md`, falls gewünscht.
 - Fülle Platzhalter (`{{PLATFORM_NAME}}`, `{{PURPOSE}}`, `{{OWNER}}`, Tabellenzeilen etc.)
@@ -102,13 +120,25 @@ das ist der eigentliche Zweck dieses Skills.
 
 - `references/macro-library.md` — kuratierte, copy-paste-fertige Confluence-Storage-Format-
   Bausteine (Panel, Info/Note/Warning/Tip, Status, Expand, TOC, Page Properties, Layout,
-  Aufgabenliste, Jira-Makro, Children Display, Content by Label, Excerpt).
-- `references/blueprint-storage.xml` — vollständiges Seitengerüst im HR-Board-Stil, mit
-  `{{PLATZHALTERN}}`, das Schritt 2 als Ausgangspunkt nimmt.
+  Aufgabenliste, Jira-Makro, Children Display, Content by Label, Excerpt, HTML-Makro,
+  ConfiForm Live-Liste).
+- `references/blueprint-storage.xml` — vollständiges statisches Seitengerüst im HR-Board-Stil,
+  mit `{{PLATZHALTERN}}`, das Schritt 2 für einfache Plattformen als Ausgangspunkt nimmt.
+- `references/dynamic-dashboard-pattern.md` — das eigentliche, aus dem echten HR-Board-Export
+  gewonnene Architekturmuster für datengetriebene Plattformen: Datenpflege-Seite (ConfiForm)
+  + Anzeige-Seite (HTML-Makro + `confiform-plain`), inkl. Filter-/Sort-/queryCount-Syntax und
+  wiederverwendbaren UI-Bausteinen (Hero, Kennzahlen-Karten, CSS-Akkordeon, Org-Kreisdiagramm,
+  Prozess-Kette u. a.).
+- `references/dashboard-design-system.css` — vollständiges, generalisiertes CSS für die
+  datengetriebene Variante (`{{PREFIX}}`/`{{FONT_STACK}}`-Platzhalter), direkt aus dem echten
+  HR-Board-Export abgeleitet.
 - `references/cloud-paste-guide.md` — Zuordnung Baustein → Cloud-Slash-Command für den
-  manuellen Nachbau, wenn kein API-Zugang genutzt wird.
-- `references/hr-board-export.xml` — **optional**, vom Nutzer bereitgestellter echter Export
-  der HR-Board-Seite (siehe Schritt 0). Existiert anfangs nicht.
+  manuellen Nachbau, falls die Instanz irgendwann doch Cloud-basiert sein sollte.
 - `scripts/publish-to-confluence.mjs` — Node-Skript, das eine `.storage.xml`-Datei per REST-
   API als neue (oder aktualisierte) Confluence-Seite anlegt. Braucht Zugangsdaten des
   Nutzers als Umgebungsvariablen, niemals von dieser Session ausgeführt.
+
+**Hinweis:** Der rohe Storage-Format-Export des HR Boards selbst (mit internen Seiten-IDs,
+Firmen-Domain, Konto-Pfad) wird bewusst **nicht** in diesem Repo gespeichert — nur die daraus
+abgeleiteten, generalisierten Bausteine oben. Bei Bedarf kann der Export erneut im Gespräch
+eingefügt werden (siehe Schritt 0); er muss dafür nicht dauerhaft irgendwo liegen.

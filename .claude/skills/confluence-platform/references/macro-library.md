@@ -258,6 +258,46 @@ gemeinsame Kontakt-Box für alle Team-Boards), damit er nur an einer Stelle gepf
 
 ---
 
+## HTML-Makro (eigenes CSS/HTML/JS einbetten)
+
+Braucht ein von Confluence-Admins freigeschaltetes/installiertes HTML-Makro (bei euch bereits
+vorhanden — im HR Board aktiv genutzt). Damit lässt sich beliebiges CSS/HTML/JS einbetten,
+losgelöst von den nativen Confluence-Makros. Wird für maßgeschneiderte Dashboards genutzt statt
+für einfache Textbausteine — siehe `references/dynamic-dashboard-pattern.md` für das
+vollständige Muster (Design-System + Kombination mit ConfiForm).
+
+```xml
+<ac:structured-macro ac:name="html" ac:schema-version="1">
+  <ac:plain-text-body><![CDATA[
+{{EIGENES_HTML_ODER_STYLE}}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+```
+
+## ConfiForm Live-Liste (`confiform-plain`) — datengetriebener Block
+
+Braucht die ConfiForm-App (bei euch installiert, Basis des HR Boards). Zieht gefilterte/
+sortierte Einträge von einer separaten Datenpflege-Seite und rendert sie per Vorlage. Siehe
+`references/dynamic-dashboard-pattern.md` für die vollständige Erklärung (Architektur,
+Filter-Syntax, `queryCount()` für Kennzahlen-Kacheln).
+
+```xml
+<ac:structured-macro ac:name="confiform-plain" ac:schema-version="1">
+  <ac:parameter ac:name="pageTitle">
+    <ac:link><ri:page ri:content-title="{{DATENPFLEGE_SEITENTITEL}}" /></ac:link>
+  </ac:parameter>
+  <ac:parameter ac:name="formName">{{FORMULARNAME}}</ac:parameter>
+  <ac:parameter ac:name="filter">{{FILTER_AUSDRUCK}}</ac:parameter>
+  <ac:parameter ac:name="sort">{{SORTIERFELD}} asc</ac:parameter>
+  <ac:parameter ac:name="limit">{{ANZAHL}}</ac:parameter>
+  <ac:plain-text-body><![CDATA[
+<div>[entry.{{FELD}}]</div>
+]]></ac:plain-text-body>
+</ac:structured-macro>
+```
+
+---
+
 ## Anchor (Sprungmarke)
 
 Für "nach oben"-Links bei langen Seiten.
