@@ -12,7 +12,11 @@ Account-Pfade) wurden hier durch `{{PLATZHALTER}}` ersetzt.
    — je Dateneinheit ein Formular (z. B. `boardStatus` für den Gesamtstatus, `boardSitzungen`
    für Sitzungstermine, `brThemen` für Einzelthemen mit Priorität/Owner/Frist, `boardTeam` für
    die Team-Zusammensetzung). Wer die Seite pflegt, trägt hier Daten in normale Formularfelder
-   ein — kein HTML, kein Storage-Format nötig für die laufende Pflege.
+   ein — kein HTML, kein Storage-Format nötig für die laufende Pflege. Der vollständige Aufbau
+   dieser Seite (Formular-Definition, Feldtypen, Eintragen-Button, Tabelle mit Bearbeiten/
+   Löschen) ist in `references/confiform-datenpflege-recipe.md` dokumentiert — die Session
+   kann daraus die komplette Datenpflege-Seite als eigene `.storage.xml` mitgenerieren, nicht
+   nur die Anzeige-Seite.
 2. **Anzeige-Seite** (das eigentliche Dashboard/Board): rein optisch aus HTML/CSS aufgebaut
    (`html`-Makro), die tatsächlichen Werte kommen aber **live** aus der Datenpflege-Seite via
    `confiform-plain`-Makros, die pro Formular filtern, sortieren, begrenzen und in ein

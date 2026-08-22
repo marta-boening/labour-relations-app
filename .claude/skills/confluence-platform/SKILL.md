@@ -62,9 +62,9 @@ Frag kompakt (nicht als Formular mit 15 Punkten, sondern 2-3 gebündelte Fragen)
    - **Datengetrieben** (wie das HR Board), wenn mehrere Personen die Inhalte laufend pflegen,
      Live-Kennzahlen/Zähler gewünscht sind, oder gefiltert/sortiert werden soll. Braucht eine
      eigene Datenpflege-Seite mit ConfiForm-Formularen (je Dateneinheit eines) — im Gespräch
-     klären, welche Formulare/Felder nötig sind, und die Anlage dieser Formulare als
-     eigenständigen Schritt für den Nutzer benennen (das kann diese Session nicht automatisch
-     erledigen, da kein Confluence-Zugriff besteht).
+     klären, welche Dateneinheiten/Formulare/Felder nötig sind. Beide Seiten (Datenpflege +
+     Anzeige) werden als eigene `.storage.xml`-Dateien generiert, siehe Schritt 2 — die
+     Session kann nur nicht direkt in Confluence anlegen, da kein Confluence-Zugriff besteht.
    - **Statisch**, wenn die Seite selten aktualisiert wird oder kein Formular-Aufwand lohnt —
      dann reicht `references/blueprint-storage.xml` mit normalen Confluence-Makros.
 3. **Welche Bausteine** gewünscht sind — biete die Standard-Bausteine aus
@@ -78,10 +78,15 @@ Frag kompakt (nicht als Formular mit 15 Punkten, sondern 2-3 gebündelte Fragen)
 
 ### Schritt 2 — Seite zusammenbauen
 
-- Bei **datengetrieben**: `references/dashboard-design-system.css` (Prefix/Font ersetzen) plus
-  `confiform-plain`-Blöcke aus `references/macro-library.md`/`dynamic-dashboard-pattern.md`
-  kombinieren. Zusätzlich kurz auflisten, welche ConfiForm-Formulare (mit Feldern) der Nutzer
-  auf der Datenpflege-Seite selbst anlegen muss — das ersetzt Schritt 2 nicht, ergänzt es aber.
+- Bei **datengetrieben**: zwei Ausgabedateien erzeugen.
+  1. `output/<slug>-datenpflege.storage.xml` — die Datenpflege-Seite, gebaut nach
+     `references/confiform-datenpflege-recipe.md` (ein Formular + Tabelle pro Dateneinheit).
+  2. `output/<slug>-platform.storage.xml` — die Anzeige-Seite, gebaut aus
+     `references/dashboard-design-system.css` (Prefix/Font ersetzen) plus `confiform-plain`-
+     Blöcken aus `references/macro-library.md`/`dynamic-dashboard-pattern.md`, die exakt auf
+     die Formulare/Felder aus Datei 1 verweisen (`formName`, `fieldName` müssen übereinstimmen).
+  Beide Dateien müssen zusammenpassen — am besten zuerst die Datenpflege-Seite entwerfen
+  (legt Formulare/Felder fest), danach die Anzeige-Seite darauf aufbauen.
 - Bei **statisch**: `references/blueprint-storage.xml` als Grundgerüst nehmen.
 - Entferne Blöcke, die der Nutzer nicht wollte; ergänze zusätzliche aus
   `references/macro-library.md`, falls gewünscht.
@@ -132,6 +137,10 @@ das ist der eigentliche Zweck dieses Skills.
 - `references/dashboard-design-system.css` — vollständiges, generalisiertes CSS für die
   datengetriebene Variante (`{{PREFIX}}`/`{{FONT_STACK}}`-Platzhalter), direkt aus dem echten
   HR-Board-Export abgeleitet.
+- `references/confiform-datenpflege-recipe.md` — vollständiges Rezept für die Datenpflege-
+  Seite selbst (ConfiForm-Formulare: Feldtypen, Auswahllisten, verknüpfte Formulare via
+  `smartselect`, Tabelle mit Bearbeiten/Löschen), aus dem echten Export der bestehenden
+  HR-BR-Board-Datenpflegeseite abgeleitet.
 - `references/cloud-paste-guide.md` — Zuordnung Baustein → Cloud-Slash-Command für den
   manuellen Nachbau, falls die Instanz irgendwann doch Cloud-basiert sein sollte.
 - `scripts/publish-to-confluence.mjs` — Node-Skript, das eine `.storage.xml`-Datei per REST-
