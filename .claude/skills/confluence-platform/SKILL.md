@@ -67,12 +67,18 @@ Frag kompakt (nicht als Formular mit 15 Punkten, sondern 2-3 gebündelte Fragen)
      Session kann nur nicht direkt in Confluence anlegen, da kein Confluence-Zugriff besteht.
    - **Statisch**, wenn die Seite selten aktualisiert wird oder kein Formular-Aufwand lohnt —
      dann reicht `references/blueprint-storage.xml` mit normalen Confluence-Makros.
-3. **Welche Bausteine** gewünscht sind — biete die Standard-Bausteine aus
+3. **Mehrere Gruppen, die sich gegenseitig NICHT einsehen dürfen?** (z. B. mehrere Gremien,
+   die alle mit derselben Stelle, aber vertraulich zueinander kommunizieren): dann
+   `references/restricted-gremien-pattern.md` anwenden — eigene Seite pro Gruppe statt einer
+   gemeinsamen Datenpflege-Seite, plus Zugriffsbeschränkung (Page Restrictions, ggf. per
+   `--restrict-groups` im Publish-Skript). Diese Frage unbedingt separat stellen, auch wenn
+   "datengetrieben" schon beantwortet ist — beides ist orthogonal und kombinierbar.
+4. **Welche Bausteine** gewünscht sind — biete die Standard-Bausteine aus
    `references/macro-library.md` als Liste an (Status-Dashboard, Team & Kontakte,
    Schnellzugriffe/Links, Fahrplan/Meilensteine, Entscheidungsprotokoll, Meeting-Notizen,
    FAQ, Onboarding/Erste Schritte, Eskalationspfad, Aufgabenliste, Kennzahlen, Ressourcen).
    Der Nutzer muss nicht alle wählen — nur was für dieses Projekt Sinn ergibt.
-4. Konkrete Inhalte, wo nötig (Teammitglieder, erste Meilensteine, Ansprechpartner) — wenn
+5. Konkrete Inhalte, wo nötig (Teammitglieder, erste Meilensteine, Ansprechpartner) — wenn
    der Nutzer das noch nicht parat hat, Platzhalter im Format `TODO: ...` einsetzen statt zu
    blockieren.
 
@@ -141,11 +147,16 @@ das ist der eigentliche Zweck dieses Skills.
   Seite selbst (ConfiForm-Formulare: Feldtypen, Auswahllisten, verknüpfte Formulare via
   `smartselect`, Tabelle mit Bearbeiten/Löschen), aus dem echten Export der bestehenden
   HR-BR-Board-Datenpflegeseite abgeleitet.
+- `references/restricted-gremien-pattern.md` — Muster für mehrere Gruppen/Gremien, die sich
+  gegenseitig nicht einsehen dürfen sollen: eigene Seite pro Gruppe statt gemeinsamer
+  Datenpflege-Seite, Zugriffsbeschränkung setzen, Warnhinweis zu Cross-Page-Aggregation und
+  Berechtigungen bei `confiform-plain`.
 - `references/cloud-paste-guide.md` — Zuordnung Baustein → Cloud-Slash-Command für den
   manuellen Nachbau, falls die Instanz irgendwann doch Cloud-basiert sein sollte.
 - `scripts/publish-to-confluence.mjs` — Node-Skript, das eine `.storage.xml`-Datei per REST-
-  API als neue (oder aktualisierte) Confluence-Seite anlegt. Braucht Zugangsdaten des
-  Nutzers als Umgebungsvariablen, niemals von dieser Session ausgeführt.
+  API als neue (oder aktualisierte) Confluence-Seite anlegt, optional mit `--restrict-groups`
+  zur direkten Zugriffsbeschränkung auf Confluence-Gruppen. Braucht Zugangsdaten des Nutzers
+  als Umgebungsvariablen, niemals von dieser Session ausgeführt.
 
 **Hinweis:** Der rohe Storage-Format-Export des HR Boards selbst (mit internen Seiten-IDs,
 Firmen-Domain, Konto-Pfad) wird bewusst **nicht** in diesem Repo gespeichert — nur die daraus
