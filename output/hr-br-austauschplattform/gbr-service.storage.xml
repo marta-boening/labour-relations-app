@@ -1,0 +1,236 @@
+<ac:structured-macro ac:name="html" ac:schema-version="1">
+<ac:plain-text-body><![CDATA[
+<style>
+.brx-dashboard{font-family:Arial,sans-serif;color:#1a1a3d;width:100%;max-width:none;margin:0 0 24px 0;box-sizing:border-box}
+.brx-dashboard *{box-sizing:border-box}
+.brx-hero{display:grid;grid-template-columns:1fr;gap:10px;padding:24px 28px;border-radius:18px;border:1px solid #d7e0f4;background:linear-gradient(135deg,#ffffff 0%,#f2f5fc 100%)}
+.brx-kicker{color:#3b4fb0;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.brx-hero h1{margin:4px 0 0 0;font-size:30px;color:#1a1a3d}
+.brx-hero p{font-size:15px;line-height:1.55;color:#33395c;margin-top:8px;max-width:820px}
+.brx-box{background:#fff;border:1px solid #dde3f2;border-radius:14px;padding:18px;margin-bottom:16px}
+.brx-box h3{margin:0 0 12px 0;font-size:18px;color:#1a1a3d}
+.brx-pill{display:inline-block;padding:4px 9px;border-radius:7px;font-size:12px;font-weight:700}
+.brx-pill.blue{background:#e7ecfb;color:#2a3fa0}
+.brx-pill.green{background:#e6f5ea;color:#1f7a3d}
+.brx-pill.orange{background:#fdf0e0;color:#a5620a}
+.brx-pill.red{background:#fbe6e6;color:#a4231b}
+.brx-pill.grey{background:#eef0f5;color:#5b6178}
+</style>
+<div class="brx-dashboard">
+  <div class="brx-hero">
+    <div class="brx-kicker">Unternehmensebene · Geschützter Bereich</div>
+    <h1>GBR Service</h1>
+    <p>Austauschbereich zwischen HR und dem Gesamtbetriebsrat Service. Nur für Mitglieder
+    des GBR Service und HR sichtbar — siehe Zugriffsbeschränkung dieser Seite.</p>
+  </div>
+</div>
+]]></ac:plain-text-body>
+</ac:structured-macro>
+
+<ac:structured-macro ac:name="info" ac:schema-version="1">
+  <ac:rich-text-body>
+    <p>Diese Seite muss nach dem Anlegen auf die Gruppen <strong>GBR-Service-Mitglieder</strong> und
+    <strong>HR</strong> beschränkt werden (Lesen + Bearbeiten). Siehe
+    Einfüge-Anleitung.</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<h2>Zusammensetzung des Gremiums</h2>
+<p>Hier wird die aktuelle Zusammensetzung des GBR Service gepflegt — nach jeder Konstituierung
+oder Veränderung bitte aktualisieren.</p>
+
+<ac:structured-macro ac:name="confiform" ac:schema-version="1">
+  <ac:parameter ac:name="formName">zusammensetzung</ac:parameter>
+  <ac:parameter ac:name="registrationFormTitle">Mitglied eintragen</ac:parameter>
+  <ac:rich-text-body>
+    <p>
+      <ac:structured-macro ac:name="confiform-field-definition" ac:schema-version="1">
+        <ac:parameter ac:name="fieldName">name</ac:parameter>
+        <ac:parameter ac:name="fieldLabel">Name, Vorname</ac:parameter>
+        <ac:parameter ac:name="type">user</ac:parameter>
+        <ac:parameter ac:name="required">true</ac:parameter>
+      </ac:structured-macro>
+    </p>
+    <p>
+      <ac:structured-macro ac:name="confiform-field-definition" ac:schema-version="1">
+        <ac:parameter ac:name="fieldName">entsendendesUnternehmen</ac:parameter>
+        <ac:parameter ac:name="fieldLabel">Entsendendes Unternehmen / Betrieb</ac:parameter>
+        <ac:parameter ac:name="type">text</ac:parameter>
+      </ac:structured-macro>
+    </p>
+    <p>
+      <ac:structured-macro ac:name="confiform-field-definition" ac:schema-version="1">
+        <ac:parameter ac:name="fieldName">funktion</ac:parameter>
+        <ac:parameter ac:name="fieldLabel">Funktion im Gremium</ac:parameter>
+        <ac:parameter ac:name="values">false[mitglied=Mitglied|vorsitz=Vorsitz|stellv1=Stellvertretung 1.|stellv2=Stellvertretung 2.|ersatz=Ersatzmitglied|]</ac:parameter>
+        <ac:parameter ac:name="type">select</ac:parameter>
+        <ac:parameter ac:name="required">true</ac:parameter>
+      </ac:structured-macro>
+    </p>
+    <p>
+      <ac:structured-macro ac:name="confiform-field-definition" ac:schema-version="1">
+        <ac:parameter ac:name="fieldName">wirksamAb</ac:parameter>
+        <ac:parameter ac:name="fieldLabel">Wirksam ab</ac:parameter>
+        <ac:parameter ac:name="extras">dd.MM.yyyy</ac:parameter>
+        <ac:parameter ac:name="type">date</ac:parameter>
+      </ac:structured-macro>
+    </p>
+    <ac:structured-macro ac:name="confiform-entry-register" ac:schema-version="1">
+      <ac:parameter ac:name="formName">zusammensetzung</ac:parameter>
+      <ac:parameter ac:name="registrationButtonLabel">Mitglied eintragen</ac:parameter>
+      <ac:rich-text-body><p><br /></p></ac:rich-text-body>
+    </ac:structured-macro>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<h3>Aktuelle Mitglieder</h3>
+<ac:structured-macro ac:name="confiform-table" ac:schema-version="1">
+  <ac:parameter ac:name="formName">zusammensetzung</ac:parameter>
+  <ac:parameter ac:name="messageToShowWhenEmpty">Noch keine Mitglieder erfasst.</ac:parameter>
+  <ac:rich-text-body>
+    <ac:structured-macro ac:name="confiform-entry-edit" ac:schema-version="1">
+      <ac:parameter ac:name="editButtonLabel">Bearbeiten</ac:parameter>
+      <ac:parameter ac:name="deleteButtonLabel">Löschen</ac:parameter>
+      <ac:parameter ac:name="updateMessage">Eintrag gespeichert.</ac:parameter>
+      <ac:rich-text-body><p><br /></p></ac:rich-text-body>
+    </ac:structured-macro>
+    <ac:structured-macro ac:name="confiform-field" ac:schema-version="1">
+      <ac:parameter ac:name="overrideLabel">Name</ac:parameter>
+      <ac:parameter ac:name="fieldName">name</ac:parameter>
+    </ac:structured-macro>
+    <ac:structured-macro ac:name="confiform-field" ac:schema-version="1">
+      <ac:parameter ac:name="overrideLabel">Entsendendes Unternehmen</ac:parameter>
+      <ac:parameter ac:name="fieldName">entsendendesUnternehmen</ac:parameter>
+    </ac:structured-macro>
+    <ac:structured-macro ac:name="confiform-field" ac:schema-version="1">
+      <ac:parameter ac:name="overrideLabel">Funktion</ac:parameter>
+      <ac:parameter ac:name="fieldName">funktion</ac:parameter>
+    </ac:structured-macro>
+    <ac:structured-macro ac:name="confiform-field" ac:schema-version="1">
+      <ac:parameter ac:name="overrideLabel">Wirksam ab</ac:parameter>
+      <ac:parameter ac:name="fieldName">wirksamAb</ac:parameter>
+    </ac:structured-macro>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<p><br /></p>
+<h2>Austausch-Themen</h2>
+<p>Themen im laufenden Austausch mit HR — sowohl einseitige Mitteilungen als auch
+wechselseitig zu klärende Punkte.</p>
+
+<ac:structured-macro ac:name="confiform" ac:schema-version="1">
+  <ac:parameter ac:name="formName">austauschThemen</ac:parameter>
+  <ac:parameter ac:name="registrationFormTitle">Thema eintragen</ac:parameter>
+  <ac:rich-text-body>
+    <p>
+      <ac:structured-macro ac:name="confiform-field-definition" ac:schema-version="1">
+        <ac:parameter ac:name="fieldName">thema</ac:parameter>
+        <ac:parameter ac:name="fieldLabel">Thema</ac:parameter>
+        <ac:parameter ac:name="type">text</ac:parameter>
+        <ac:parameter ac:name="required">true</ac:parameter>
+      </ac:structured-macro>
+    </p>
+    <p>
+      <ac:structured-macro ac:name="confiform-field-definition" ac:schema-version="1">
+        <ac:parameter ac:name="fieldName">beschreibung</ac:parameter>
+        <ac:parameter ac:name="fieldLabel">Beschreibung</ac:parameter>
+        <ac:parameter ac:name="type">textarea</ac:parameter>
+      </ac:structured-macro>
+    </p>
+    <p>
+      <ac:structured-macro ac:name="confiform-field-definition" ac:schema-version="1">
+        <ac:parameter ac:name="fieldName">richtung</ac:parameter>
+        <ac:parameter ac:name="fieldLabel">Richtung</ac:parameter>
+        <ac:parameter ac:name="values">false[einseitigBrHr=Einseitig: Gremium an HR|einseitigHrBr=Einseitig: HR an Gremium|wechselseitig=Wechselseitig / im Austausch|]</ac:parameter>
+        <ac:parameter ac:name="type">select</ac:parameter>
+        <ac:parameter ac:name="required">true</ac:parameter>
+      </ac:structured-macro>
+    </p>
+    <p>
+      <ac:structured-macro ac:name="confiform-field-definition" ac:schema-version="1">
+        <ac:parameter ac:name="fieldName">status</ac:parameter>
+        <ac:parameter ac:name="fieldLabel">Status</ac:parameter>
+        <ac:parameter ac:name="values">false[offen=Offen|inBearbeitung=In Bearbeitung|erledigt=Erledigt|]</ac:parameter>
+        <ac:parameter ac:name="type">select</ac:parameter>
+      </ac:structured-macro>
+    </p>
+    <p>
+      <ac:structured-macro ac:name="confiform-field-definition" ac:schema-version="1">
+        <ac:parameter ac:name="fieldName">naechsterSchritt</ac:parameter>
+        <ac:parameter ac:name="fieldLabel">Nächster Schritt</ac:parameter>
+        <ac:parameter ac:name="type">textarea</ac:parameter>
+      </ac:structured-macro>
+    </p>
+    <p>
+      <ac:structured-macro ac:name="confiform-field-definition" ac:schema-version="1">
+        <ac:parameter ac:name="fieldName">owner</ac:parameter>
+        <ac:parameter ac:name="fieldLabel">Owner</ac:parameter>
+        <ac:parameter ac:name="type">user</ac:parameter>
+      </ac:structured-macro>
+    </p>
+    <p>
+      <ac:structured-macro ac:name="confiform-field-definition" ac:schema-version="1">
+        <ac:parameter ac:name="fieldName">frist</ac:parameter>
+        <ac:parameter ac:name="fieldLabel">Frist</ac:parameter>
+        <ac:parameter ac:name="extras">dd.MM.yyyy</ac:parameter>
+        <ac:parameter ac:name="type">date</ac:parameter>
+      </ac:structured-macro>
+    </p>
+    <p>
+      <ac:structured-macro ac:name="confiform-field-definition" ac:schema-version="1">
+        <ac:parameter ac:name="fieldName">linkUnterlagen</ac:parameter>
+        <ac:parameter ac:name="fieldLabel">Link zu Unterlagen</ac:parameter>
+        <ac:parameter ac:name="fieldDescription">Link (URL) zu Unterlage/Ordner, z. B. aus SharePoint</ac:parameter>
+        <ac:parameter ac:name="type">text</ac:parameter>
+      </ac:structured-macro>
+    </p>
+    <ac:structured-macro ac:name="confiform-entry-register" ac:schema-version="1">
+      <ac:parameter ac:name="formName">austauschThemen</ac:parameter>
+      <ac:parameter ac:name="registrationButtonLabel">Thema eintragen</ac:parameter>
+      <ac:rich-text-body><p><br /></p></ac:rich-text-body>
+    </ac:structured-macro>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<h3>Erfasste Themen</h3>
+<ac:structured-macro ac:name="confiform-table" ac:schema-version="1">
+  <ac:parameter ac:name="formName">austauschThemen</ac:parameter>
+  <ac:parameter ac:name="messageToShowWhenEmpty">Aktuell keine Themen erfasst.</ac:parameter>
+  <ac:parameter ac:name="sort">frist ASC</ac:parameter>
+  <ac:rich-text-body>
+    <ac:structured-macro ac:name="confiform-entry-edit" ac:schema-version="1">
+      <ac:parameter ac:name="editButtonLabel">Bearbeiten</ac:parameter>
+      <ac:parameter ac:name="deleteButtonLabel">Löschen</ac:parameter>
+      <ac:parameter ac:name="updateMessage">Änderungen gespeichert.</ac:parameter>
+      <ac:rich-text-body><p><br /></p></ac:rich-text-body>
+    </ac:structured-macro>
+    <ac:structured-macro ac:name="confiform-field" ac:schema-version="1">
+      <ac:parameter ac:name="overrideLabel">Thema</ac:parameter>
+      <ac:parameter ac:name="fieldName">thema</ac:parameter>
+    </ac:structured-macro>
+    <ac:structured-macro ac:name="confiform-field" ac:schema-version="1">
+      <ac:parameter ac:name="overrideLabel">Richtung</ac:parameter>
+      <ac:parameter ac:name="fieldName">richtung</ac:parameter>
+    </ac:structured-macro>
+    <ac:structured-macro ac:name="confiform-field" ac:schema-version="1">
+      <ac:parameter ac:name="overrideLabel">Status</ac:parameter>
+      <ac:parameter ac:name="fieldName">status</ac:parameter>
+    </ac:structured-macro>
+    <ac:structured-macro ac:name="confiform-field" ac:schema-version="1">
+      <ac:parameter ac:name="overrideLabel">Nächster Schritt</ac:parameter>
+      <ac:parameter ac:name="fieldName">naechsterSchritt</ac:parameter>
+    </ac:structured-macro>
+    <ac:structured-macro ac:name="confiform-field" ac:schema-version="1">
+      <ac:parameter ac:name="overrideLabel">Owner</ac:parameter>
+      <ac:parameter ac:name="fieldName">owner</ac:parameter>
+    </ac:structured-macro>
+    <ac:structured-macro ac:name="confiform-field" ac:schema-version="1">
+      <ac:parameter ac:name="overrideLabel">Frist</ac:parameter>
+      <ac:parameter ac:name="fieldName">frist</ac:parameter>
+    </ac:structured-macro>
+    <ac:structured-macro ac:name="confiform-field" ac:schema-version="1">
+      <ac:parameter ac:name="overrideLabel">Unterlagen</ac:parameter>
+      <ac:parameter ac:name="fieldName">linkUnterlagen</ac:parameter>
+    </ac:structured-macro>
+  </ac:rich-text-body>
+</ac:structured-macro>

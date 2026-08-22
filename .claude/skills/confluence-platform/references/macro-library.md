@@ -11,6 +11,14 @@ Namespace). Jeder Block ist eigenständig einfügbar. Platzhalter sind `{{SO_GES
 > in diese Datei übernehmen — dann ist die Syntax garantiert kompatibel mit der eigenen
 > Instanz.
 
+> **Zeichenkodierung:** Storage-Format ist striktes XML ohne DTD — benannte HTML-Entities wie
+> `&uuml;`, `&mdash;`, `&rarr;` sind darin **ungültig** und führen beim Einfügen/per REST-API
+> zu einem Parse-Fehler. Umlaute, Gedankenstriche, Pfeile etc. immer als **echtes UTF-8-Zeichen**
+> direkt in den Text schreiben (ü, ö, ä, ß, –, —, →, ↔), nicht als Entity. Nur die fünf
+> XML-Standard-Entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`) und numerische Entities
+> (`&#252;`) sind zulässig. Der echte HR-Board-Export nutzt durchgehend echte UTF-8-Zeichen —
+> das ist der zuverlässige Weg.
+
 ---
 
 ## Inhaltsverzeichnis (TOC)

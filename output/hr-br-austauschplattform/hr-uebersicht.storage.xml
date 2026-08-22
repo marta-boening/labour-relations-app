@@ -1,0 +1,163 @@
+<ac:structured-macro ac:name="html" ac:schema-version="1">
+<ac:plain-text-body><![CDATA[
+<style>
+.brx-dashboard{font-family:Arial,sans-serif;color:#1a1a3d;width:100%;max-width:none;margin:0 0 24px 0;box-sizing:border-box}
+.brx-dashboard *{box-sizing:border-box}
+.brx-hero{display:grid;grid-template-columns:1fr;gap:10px;padding:24px 28px;border-radius:18px;border:1px solid #d7e0f4;background:linear-gradient(135deg,#ffffff 0%,#f2f5fc 100%)}
+.brx-kicker{color:#3b4fb0;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.brx-hero h1{margin:4px 0 0 0;font-size:30px;color:#1a1a3d}
+.brx-hero p{font-size:15px;line-height:1.55;color:#33395c;margin-top:8px;max-width:820px}
+.brx-box{background:#fff;border:1px solid #dde3f2;border-radius:14px;padding:18px;margin-bottom:16px}
+.brx-box h3{margin:0 0 12px 0;font-size:18px;color:#1a1a3d}
+.brx-table{width:100%;border-collapse:collapse;font-size:14px}
+.brx-table th{text-align:left;background:#f4f6fb;color:#4a5170;padding:9px 10px;border-bottom:1px solid #e2e6f2;font-weight:700;font-size:12px;text-transform:uppercase}
+.brx-table td{padding:9px 10px;border-bottom:1px solid #eef0f7;vertical-align:top}
+.brx-live-head,.brx-live-row{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;padding:9px 10px;align-items:center;font-size:13px}
+.brx-live-head{background:#f4f6fb;font-weight:700;color:#4a5170;font-size:12px;text-transform:uppercase;border-radius:8px 8px 0 0}
+.brx-live-row{border-bottom:1px solid #eef0f7}
+.brx-pill{display:inline-block;padding:4px 9px;border-radius:7px;font-size:12px;font-weight:700}
+.brx-pill.blue{background:#e7ecfb;color:#2a3fa0}
+.brx-pill.green{background:#e6f5ea;color:#1f7a3d}
+.brx-pill.orange{background:#fdf0e0;color:#a5620a}
+</style>
+<div class="brx-dashboard">
+  <div class="brx-hero">
+    <div class="brx-kicker">Nur für HR</div>
+    <h1>HR-Übersicht (BR-Austausch)</h1>
+    <p>Konsolidierte Sicht auf alle Gremien-Bereiche. Diese Seite muss auf die HR-Gruppe
+    beschränkt werden — niemand außerhalb von HR darf sie sehen können,
+    da hier Auszüge aus allen Gremien zusammenlaufen.</p>
+  </div>
+</div>
+]]></ac:plain-text-body>
+</ac:structured-macro>
+
+<ac:structured-macro ac:name="warning" ac:schema-version="1">
+  <ac:rich-text-body>
+    <p><strong>Vor Go-Live prüfen:</strong> Diese Seite zieht per <code>confiform-plain</code>
+    Daten von den einzelnen (eingeschränkten) Gremium-Seiten. Ob ConfiForm dabei die
+    Zugriffsbeschränkung der Quellseite respektiert, ist ungeprüft — siehe
+    <em>references/restricted-gremien-pattern.md</em> im confluence-platform-Skill. Solange
+    diese HR-Übersicht-Seite selbst zuverlässig nur für HR zugänglich ist,
+    ist das unkritisch. Vor Freigabe an weitere Personen unbedingt mit einem Test-Account
+    verifizieren.</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<h2>Vorsitz &amp; Stellvertretung je Gremium</h2>
+
+<ac:structured-macro ac:name="html" ac:schema-version="1">
+<ac:plain-text-body><![CDATA[
+<div class="brx-live-head">
+  <div>Gremium</div><div>Rolle</div><div>Name</div><div>Wirksam ab</div>
+</div>
+]]></ac:plain-text-body>
+</ac:structured-macro>
+
+<ac:structured-macro ac:name="confiform-plain" ac:schema-version="1">
+  <ac:parameter ac:name="pageTitle"><ac:link><ri:page ri:content-title="GBR AG" /></ac:link></ac:parameter>
+  <ac:parameter ac:name="formName">zusammensetzung</ac:parameter>
+  <ac:parameter ac:name="filter">funktion:vorsitz</ac:parameter>
+  <ac:plain-text-body><![CDATA[
+<div class="brx-live-row">
+  <div><span class="brx-pill blue">GBR AG</span></div>
+  <div>Vorsitz</div>
+  <div>[entry.name.firstName] [entry.name.lastName]</div>
+  <div>[entry.wirksamAb.formatDate(dd.MM.yyyy)]</div>
+</div>
+]]></ac:plain-text-body>
+</ac:structured-macro>
+
+<ac:structured-macro ac:name="confiform-plain" ac:schema-version="1">
+  <ac:parameter ac:name="pageTitle"><ac:link><ri:page ri:content-title="GBR Service" /></ac:link></ac:parameter>
+  <ac:parameter ac:name="formName">zusammensetzung</ac:parameter>
+  <ac:parameter ac:name="filter">funktion:vorsitz</ac:parameter>
+  <ac:plain-text-body><![CDATA[
+<div class="brx-live-row">
+  <div><span class="brx-pill green">GBR Service</span></div>
+  <div>Vorsitz</div>
+  <div>[entry.name.firstName] [entry.name.lastName]</div>
+  <div>[entry.wirksamAb.formatDate(dd.MM.yyyy)]</div>
+</div>
+]]></ac:plain-text-body>
+</ac:structured-macro>
+
+<ac:structured-macro ac:name="confiform-plain" ac:schema-version="1">
+  <ac:parameter ac:name="pageTitle"><ac:link><ri:page ri:content-title="KBR" /></ac:link></ac:parameter>
+  <ac:parameter ac:name="formName">zusammensetzung</ac:parameter>
+  <ac:parameter ac:name="filter">funktion:vorsitz</ac:parameter>
+  <ac:plain-text-body><![CDATA[
+<div class="brx-live-row">
+  <div><span class="brx-pill orange">KBR</span></div>
+  <div>Vorsitz</div>
+  <div>[entry.name.firstName] [entry.name.lastName]</div>
+  <div>[entry.wirksamAb.formatDate(dd.MM.yyyy)]</div>
+</div>
+]]></ac:plain-text-body>
+</ac:structured-macro>
+
+<p><br /></p>
+<h2>Offene Austausch-Themen über alle Gremien</h2>
+
+<ac:structured-macro ac:name="html" ac:schema-version="1">
+<ac:plain-text-body><![CDATA[
+<div class="brx-live-head">
+  <div>Gremium</div><div>Thema</div><div>Status</div><div>Frist</div>
+</div>
+]]></ac:plain-text-body>
+</ac:structured-macro>
+
+<ac:structured-macro ac:name="confiform-plain" ac:schema-version="1">
+  <ac:parameter ac:name="pageTitle"><ac:link><ri:page ri:content-title="GBR AG" /></ac:link></ac:parameter>
+  <ac:parameter ac:name="formName">austauschThemen</ac:parameter>
+  <ac:parameter ac:name="filter">status:offen</ac:parameter>
+  <ac:parameter ac:name="sort">frist asc</ac:parameter>
+  <ac:plain-text-body><![CDATA[
+<div class="brx-live-row">
+  <div><span class="brx-pill blue">GBR AG</span></div>
+  <div>[entry.thema]</div>
+  <div>[entry.status.label]</div>
+  <div>[entry.frist.formatDate(dd.MM.yyyy)]</div>
+</div>
+]]></ac:plain-text-body>
+</ac:structured-macro>
+
+<ac:structured-macro ac:name="confiform-plain" ac:schema-version="1">
+  <ac:parameter ac:name="pageTitle"><ac:link><ri:page ri:content-title="GBR Service" /></ac:link></ac:parameter>
+  <ac:parameter ac:name="formName">austauschThemen</ac:parameter>
+  <ac:parameter ac:name="filter">status:offen</ac:parameter>
+  <ac:parameter ac:name="sort">frist asc</ac:parameter>
+  <ac:plain-text-body><![CDATA[
+<div class="brx-live-row">
+  <div><span class="brx-pill green">GBR Service</span></div>
+  <div>[entry.thema]</div>
+  <div>[entry.status.label]</div>
+  <div>[entry.frist.formatDate(dd.MM.yyyy)]</div>
+</div>
+]]></ac:plain-text-body>
+</ac:structured-macro>
+
+<ac:structured-macro ac:name="confiform-plain" ac:schema-version="1">
+  <ac:parameter ac:name="pageTitle"><ac:link><ri:page ri:content-title="KBR" /></ac:link></ac:parameter>
+  <ac:parameter ac:name="formName">austauschThemen</ac:parameter>
+  <ac:parameter ac:name="filter">status:offen</ac:parameter>
+  <ac:parameter ac:name="sort">frist asc</ac:parameter>
+  <ac:plain-text-body><![CDATA[
+<div class="brx-live-row">
+  <div><span class="brx-pill orange">KBR</span></div>
+  <div>[entry.thema]</div>
+  <div>[entry.status.label]</div>
+  <div>[entry.frist.formatDate(dd.MM.yyyy)]</div>
+</div>
+]]></ac:plain-text-body>
+</ac:structured-macro>
+
+<p><br /></p>
+<ac:structured-macro ac:name="info" ac:schema-version="1">
+  <ac:rich-text-body>
+    <p><strong>Phase 2:</strong> Sobald örtliche BR-Seiten angelegt sind, hier je Standort
+    einen weiteren <code>confiform-plain</code>-Block für Wahlergebnis/Freistellungen
+    ergänzen (Formulare <code>wahlInfo</code>/<code>freistellungen</code> auf der jeweiligen
+    Standort-Seite, siehe <em>oertlicher-br-vorlage.storage.xml</em>).</p>
+  </ac:rich-text-body>
+</ac:structured-macro>

@@ -1,0 +1,131 @@
+<ac:structured-macro ac:name="html" ac:schema-version="1">
+<ac:plain-text-body><![CDATA[
+<style>
+.brx-dashboard{font-family:Arial,sans-serif;color:#1a1a3d;width:100%;max-width:none;margin:0 0 24px 0;box-sizing:border-box}
+.brx-dashboard *{box-sizing:border-box}
+.brx-hero{display:grid;grid-template-columns:1fr;gap:10px;padding:24px 28px;border-radius:18px;border:1px solid #d7e0f4;background:linear-gradient(135deg,#ffffff 0%,#f2f5fc 100%)}
+.brx-kicker{color:#3b4fb0;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.brx-hero h1{margin:4px 0 0 0;font-size:30px;color:#1a1a3d}
+.brx-hero p{font-size:15px;line-height:1.55;color:#33395c;margin-top:8px;max-width:820px}
+.brx-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
+.brx-card{background:#fff;border:1px solid #dde3f2;border-radius:12px;padding:16px;box-shadow:0 4px 12px rgba(30,40,90,.05)}
+.brx-card .brx-label{font-size:12px;color:#6b7290;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.brx-card .brx-value{font-size:24px;font-weight:800;color:#1a1a3d;margin-top:4px}
+.brx-card .brx-value.warn{color:#c0392b}
+.brx-card .brx-small{font-size:12px;color:#8890ab;margin-top:2px}
+.brx-box{background:#fff;border:1px solid #dde3f2;border-radius:14px;padding:18px;margin-bottom:16px}
+.brx-box h3{margin:0 0 12px 0;font-size:18px;color:#1a1a3d}
+.brx-table{width:100%;border-collapse:collapse;font-size:14px}
+.brx-table th{text-align:left;background:#f4f6fb;color:#4a5170;padding:9px 10px;border-bottom:1px solid #e2e6f2;font-weight:700;font-size:12px;text-transform:uppercase}
+.brx-table td{padding:9px 10px;border-bottom:1px solid #eef0f7;vertical-align:top}
+.brx-pill{display:inline-block;padding:4px 9px;border-radius:7px;font-size:12px;font-weight:700}
+.brx-pill.blue{background:#e7ecfb;color:#2a3fa0}
+.brx-pill.green{background:#e6f5ea;color:#1f7a3d}
+.brx-pill.orange{background:#fdf0e0;color:#a5620a}
+.brx-pill.red{background:#fbe6e6;color:#a4231b}
+.brx-pill.grey{background:#eef0f5;color:#5b6178}
+.brx-nav{margin-top:14px;padding:10px 14px;background:#fff;border:1px solid #dde3f2;border-radius:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.brx-nav-title{font-size:13px;font-weight:700;color:#33395c}
+.brx-nav a{text-decoration:none;padding:8px 12px;border-radius:8px;border:1px solid #dde3f2;font-size:13px;font-weight:700;color:#2a3fa0;background:#f6f8fd}
+.brx-lower-2cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media only screen and (max-width:900px){.brx-cards,.brx-lower-2cards{grid-template-columns:1fr}}
+</style>
+<div class="brx-dashboard">
+  <div class="brx-hero">
+    <div class="brx-kicker">HR – Betriebsrats-Zusammenarbeit</div>
+    <h1>HR-BR Austauschplattform</h1>
+    <p>Zentrale Plattform für den Informationsaustausch zwischen HR und den Betriebsratsgremien.
+    Jedes Gremium hat einen eigenen, geschützten Bereich — nur das jeweilige Gremium und HR
+    sehen die dort hinterlegten Informationen. Diese Übersichtsseite selbst zeigt keine
+    vertraulichen Inhalte, sondern nur die Struktur und Navigation.</p>
+  </div>
+</div>
+]]></ac:plain-text-body>
+</ac:structured-macro>
+
+<h2>Gremien-Ebenen in dieser Plattform</h2>
+
+<table>
+  <tbody>
+    <tr>
+      <th>Ebene</th>
+      <th>Gremium</th>
+      <th>Status</th>
+    </tr>
+    <tr>
+      <td>Konzernebene</td>
+      <td>Konzernbetriebsrat (KBR)</td>
+      <td><ac:structured-macro ac:name="status" ac:schema-version="1"><ac:parameter ac:name="colour">Green</ac:parameter><ac:parameter ac:name="title">PHASE 1 AKTIV</ac:parameter></ac:structured-macro></td>
+    </tr>
+    <tr>
+      <td>Unternehmensebene</td>
+      <td>Gesamtbetriebsrat AG (GBR AG)</td>
+      <td><ac:structured-macro ac:name="status" ac:schema-version="1"><ac:parameter ac:name="colour">Green</ac:parameter><ac:parameter ac:name="title">PHASE 1 AKTIV</ac:parameter></ac:structured-macro></td>
+    </tr>
+    <tr>
+      <td>Unternehmensebene</td>
+      <td>Gesamtbetriebsrat Service (GBR Service)</td>
+      <td><ac:structured-macro ac:name="status" ac:schema-version="1"><ac:parameter ac:name="colour">Green</ac:parameter><ac:parameter ac:name="title">PHASE 1 AKTIV</ac:parameter></ac:structured-macro></td>
+    </tr>
+    <tr>
+      <td>Örtliche Ebene</td>
+      <td>Örtliche Betriebsräte (je Standort)</td>
+      <td><ac:structured-macro ac:name="status" ac:schema-version="1"><ac:parameter ac:name="colour">Grey</ac:parameter><ac:parameter ac:name="title">PHASE 2 GEPLANT</ac:parameter></ac:structured-macro></td>
+    </tr>
+  </tbody>
+</table>
+
+<p><br /></p>
+
+<ac:structured-macro ac:name="html" ac:schema-version="1">
+<ac:plain-text-body><![CDATA[
+<div class="brx-dashboard">
+  <div class="brx-nav">
+    <div class="brx-nav-title">Zu den Gremien-Bereichen</div>
+    <a href="#gbr-ag-link">GBR AG</a>
+    <a href="#gbr-service-link">GBR Service</a>
+    <a href="#kbr-link">KBR</a>
+    <a href="#hr-uebersicht-link">HR-Übersicht (nur HR)</a>
+  </div>
+</div>
+]]></ac:plain-text-body>
+</ac:structured-macro>
+
+<p><br /></p>
+<p><a id="gbr-ag-link"></a><strong>GBR AG:</strong> <ac:link><ri:page ri:content-title="GBR AG" /></ac:link> — sichtbar nur für GBR-AG-Mitglieder und HR.</p>
+<p><a id="gbr-service-link"></a><strong>GBR Service:</strong> <ac:link><ri:page ri:content-title="GBR Service" /></ac:link> — sichtbar nur für GBR-Service-Mitglieder und HR.</p>
+<p><a id="kbr-link"></a><strong>KBR:</strong> <ac:link><ri:page ri:content-title="KBR" /></ac:link> — sichtbar nur für KBR-Mitglieder und HR.</p>
+<p><a id="hr-uebersicht-link"></a><strong>HR-Übersicht:</strong> <ac:link><ri:page ri:content-title="HR-Übersicht (BR-Austausch)" /></ac:link> — nur für HR sichtbar.</p>
+
+<p><br /></p>
+<h2>Wie die Plattform funktioniert</h2>
+
+<ac:structured-macro ac:name="expand" ac:schema-version="1">
+  <ac:parameter ac:name="title">Einseitige Informationen (Gremium → HR)</ac:parameter>
+  <ac:rich-text-body>
+    <p>Informationen, die ein Gremium gesetzlich oder organisatorisch an HR übermitteln muss
+    — z. B. Gremienzusammensetzung nach einer Wahl, Freistellungen. Diese werden auf der
+    jeweiligen Gremium-Seite in ein Formular eingetragen (durch das Gremium selbst, sofern
+    Confluence-Zugang besteht, oder durch HR nach Erhalt der Information auf anderem Weg).</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<ac:structured-macro ac:name="expand" ac:schema-version="1">
+  <ac:parameter ac:name="title">Wechselseitiger Austausch (Gremium ↔ HR)</ac:parameter>
+  <ac:rich-text-body>
+    <p>Themen, zu denen beide Seiten Beiträge leisten — z. B. laufende Abstimmungen,
+    Unterlagen, Notizen. Diese werden im Bereich &quot;Austausch-Themen&quot; der jeweiligen
+    Gremium-Seite gepflegt und sind für beide Seiten (Gremium + HR) einsehbar und
+    bearbeitbar.</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<ac:structured-macro ac:name="expand" ac:schema-version="1">
+  <ac:parameter ac:name="title">Vertraulichkeit zwischen den Gremien</ac:parameter>
+  <ac:rich-text-body>
+    <p>Jede Gremium-Seite ist per Confluence-Zugriffsbeschränkung nur für das jeweilige
+    Gremium und HR sichtbar. Ein Gremium sieht die Inhalte eines anderen Gremiums nicht. Details
+    zur technischen Umsetzung: siehe <em>references/restricted-gremien-pattern.md</em> im
+    confluence-platform-Skill.</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
