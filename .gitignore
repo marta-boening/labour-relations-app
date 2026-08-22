@@ -1,4 +1,6 @@
 node_modules/
 server/.env
 .DS_Store
-.claude/
+.claude/*
+!.claude/skills/
+!.claude/skills/**

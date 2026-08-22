@@ -1,0 +1,199 @@
+<!--
+  Blueprint für eine Confluence-Zusammenarbeitsplattform (Storage-Format), im Stil des
+  bestehenden HR Board. Wird von SKILL.md Schritt 2 als Ausgangspunkt genommen: nicht
+  gewünschte Blöcke entfernen, Platzhalter {{SO}} mit den Interview-Antworten füllen.
+  Reihenfolge/Struktur bewusst konsistent gehalten, damit alle Plattform-Seiten im Space
+  wiedererkennbar gleich aufgebaut sind.
+-->
+
+<ac:structured-macro ac:name="toc" ac:schema-version="1">
+  <ac:parameter ac:name="maxLevel">3</ac:parameter>
+  <ac:parameter ac:name="minLevel">1</ac:parameter>
+</ac:structured-macro>
+
+<h1>{{PLATTFORM_NAME}}</h1>
+
+<ac:structured-macro ac:name="panel" ac:schema-version="1">
+  <ac:parameter ac:name="title">Über diese Seite</ac:parameter>
+  <ac:parameter ac:name="borderColor">#0052CC</ac:parameter>
+  <ac:parameter ac:name="bgColor">#DEEBFF</ac:parameter>
+  <ac:rich-text-body>
+    <p>{{ZWECK_UND_ZIELGRUPPE}}</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<!-- STATUS-DASHBOARD -->
+<ac:structured-macro ac:name="details" ac:schema-version="1">
+  <ac:parameter ac:name="id">{{PLATTFORM_SLUG}}-meta</ac:parameter>
+  <ac:rich-text-body>
+    <table>
+      <tbody>
+        <tr>
+          <th>Owner</th>
+          <td>{{OWNER}}</td>
+        </tr>
+        <tr>
+          <th>Status</th>
+          <td>
+            <ac:structured-macro ac:name="status" ac:schema-version="1">
+              <ac:parameter ac:name="colour">Green</ac:parameter>
+              <ac:parameter ac:name="title">{{STATUS_TEXT}}</ac:parameter>
+            </ac:structured-macro>
+          </td>
+        </tr>
+        <tr>
+          <th>Letztes Update</th>
+          <td>{{DATUM}}</td>
+        </tr>
+        <tr>
+          <th>Nächster Meilenstein</th>
+          <td>{{MEILENSTEIN}}</td>
+        </tr>
+      </tbody>
+    </table>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<h2>Team &amp; Ansprechpartner</h2>
+
+<ac:layout>
+  <ac:layout-section ac:type="two_equal">
+    <ac:layout-cell>
+      <table>
+        <tbody>
+          <tr>
+            <th>Rolle</th>
+            <th>Name</th>
+            <th>Kontakt</th>
+          </tr>
+          <tr>
+            <td>{{ROLLE_1}}</td>
+            <td>{{NAME_1}}</td>
+            <td>{{KONTAKT_1}}</td>
+          </tr>
+          <tr>
+            <td>{{ROLLE_2}}</td>
+            <td>{{NAME_2}}</td>
+            <td>{{KONTAKT_2}}</td>
+          </tr>
+        </tbody>
+      </table>
+    </ac:layout-cell>
+    <ac:layout-cell>
+      <ac:structured-macro ac:name="panel" ac:schema-version="1">
+        <ac:parameter ac:name="title">Schnellzugriffe</ac:parameter>
+        <ac:rich-text-body>
+          <ul>
+            <li>{{LINK_1}}</li>
+            <li>{{LINK_2}}</li>
+            <li>{{LINK_3}}</li>
+          </ul>
+        </ac:rich-text-body>
+      </ac:structured-macro>
+    </ac:layout-cell>
+  </ac:layout-section>
+</ac:layout>
+
+<h2>Fahrplan &amp; Meilensteine</h2>
+
+<table>
+  <tbody>
+    <tr>
+      <th>Meilenstein</th>
+      <th>Termin</th>
+      <th>Status</th>
+    </tr>
+    <tr>
+      <td>{{MEILENSTEIN_1}}</td>
+      <td>{{TERMIN_1}}</td>
+      <td>
+        <ac:structured-macro ac:name="status" ac:schema-version="1">
+          <ac:parameter ac:name="colour">Grey</ac:parameter>
+          <ac:parameter ac:name="title">GEPLANT</ac:parameter>
+        </ac:structured-macro>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Entscheidungsprotokoll</h2>
+
+<table>
+  <tbody>
+    <tr>
+      <th>Datum</th>
+      <th>Entscheidung</th>
+      <th>Begründung</th>
+      <th>Entschieden von</th>
+    </tr>
+    <tr>
+      <td>{{DATUM_1}}</td>
+      <td>{{ENTSCHEIDUNG_1}}</td>
+      <td>{{BEGRUENDUNG_1}}</td>
+      <td>{{ENTSCHEIDER_1}}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Meeting-Notizen</h2>
+
+<p>Automatische Liste der Unterseiten dieses Bereichs:</p>
+
+<ac:structured-macro ac:name="children" ac:schema-version="1">
+  <ac:parameter ac:name="depth">1</ac:parameter>
+</ac:structured-macro>
+
+<h2>Häufige Fragen (FAQ)</h2>
+
+<ac:structured-macro ac:name="expand" ac:schema-version="1">
+  <ac:parameter ac:name="title">{{FRAGE_1}}</ac:parameter>
+  <ac:rich-text-body>
+    <p>{{ANTWORT_1}}</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<h2>Erste Schritte / Onboarding</h2>
+
+<ac:structured-macro ac:name="info" ac:schema-version="1">
+  <ac:rich-text-body>
+    <p>{{ONBOARDING_HINWEIS}}</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<ol>
+  <li>{{SCHRITT_1}}</li>
+  <li>{{SCHRITT_2}}</li>
+</ol>
+
+<h2>Eskalationspfad</h2>
+
+<table>
+  <tbody>
+    <tr>
+      <th>Stufe</th>
+      <th>Ansprechpartner</th>
+      <th>Wann eskalieren</th>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>{{ESKALATION_1}}</td>
+      <td>{{ESKALATION_KRITERIUM_1}}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Offene Aufgaben</h2>
+
+<ac:task-list>
+  <ac:task>
+    <ac:task-id>1</ac:task-id>
+    <ac:task-status>incomplete</ac:task-status>
+    <ac:task-body>{{AUFGABE_1}}</ac:task-body>
+  </ac:task>
+</ac:task-list>
+
+<h2>Ressourcen</h2>
+
+<ul>
+  <li>{{RESSOURCE_1}}</li>
+</ul>
